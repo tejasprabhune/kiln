@@ -7,6 +7,7 @@ mod build;
 mod check;
 mod check_manifest;
 mod deps;
+mod doc;
 mod fmt;
 mod new;
 mod test;
@@ -135,6 +136,13 @@ enum Command {
         trace: bool,
     },
 
+    /// Generate a static documentation site under `target/doc/`.
+    Doc {
+        /// Open the generated index page in a browser.
+        #[arg(long)]
+        open: bool,
+    },
+
     /// Open a recorded FST waveform in surfer.
     Wave {
         /// Test name. Defaults to the most recently produced FST.
@@ -194,6 +202,7 @@ impl Cli {
                 list,
                 trace,
             } => test::run(filter, jobs, no_fail_fast, list, trace),
+            Command::Doc { open } => doc::run(open),
             Command::Wave { test, print_path } => wave::run(test, print_path),
             Command::CheckManifest { path } => check_manifest::run(path.as_deref()),
         }
