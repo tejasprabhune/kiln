@@ -1,0 +1,10 @@
+---
+source: crates/kiln-cli/tests/cli_new.rs
+expression: snapshot_layout(&project)
+---
+.gitignore
+Kiln.toml
+src
+src/demo.sv
+tests
+tests/.gitkeep

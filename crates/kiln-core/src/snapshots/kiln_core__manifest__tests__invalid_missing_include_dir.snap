@@ -1,0 +1,5 @@
+---
+source: crates/kiln-core/src/manifest.rs
+expression: "ManifestError::MissingIncludeDir(std::path::PathBuf::from(\"does/not/exist\")).to_string()"
+---
+include directory `does/not/exist` does not exist

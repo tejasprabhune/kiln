@@ -1,0 +1,132 @@
+use std::path::{Path, PathBuf};
+
+use anyhow::{anyhow, bail, Context, Result};
+
+use kiln_core::{Manifest, ValidateOptions};
+
+/// `kiln new <name>` — create a new project at `<base>/<name>/`.
+pub fn run_new(name: &str, base: Option<&Path>) -> Result<()> {
+    let base = match base {
+        Some(b) => b.to_path_buf(),
+        None => std::env::current_dir().context("reading current directory")?,
+    };
+    let target = base.join(name);
+    if target.exists() {
+        bail!("destination `{}` already exists", target.display());
+    }
+    std::fs::create_dir_all(&target)
+        .with_context(|| format!("creating project directory {}", target.display()))?;
+    write_template(&target, name)?;
+    println!("Created kiln project `{name}` at {}", target.display());
+    Ok(())
+}
+
+/// `kiln init` — same as `new` but in the current directory.
+pub fn run_init(name: Option<&str>) -> Result<()> {
+    let cwd = std::env::current_dir().context("reading current directory")?;
+    let derived_name = match name {
+        Some(n) => n.to_string(),
+        None => cwd
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow!("could not derive package name from current directory"))?
+            .to_string(),
+    };
+    if cwd.join("Kiln.toml").exists() {
+        bail!("`Kiln.toml` already exists in {}", cwd.display());
+    }
+    write_template(&cwd, &derived_name)?;
+    println!(
+        "Initialized kiln project `{derived_name}` in {}",
+        cwd.display()
+    );
+    Ok(())
+}
+
+fn write_template(root: &Path, name: &str) -> Result<()> {
+    let manifest_text = render_manifest(name);
+
+    // Validate that the rendered manifest parses cleanly. If we ever change
+    // the template in a way that breaks parsing, this catches it locally
+    // before the user sees a confusing `kiln check-manifest` failure.
+    let parsed = manifest_text
+        .parse::<Manifest>()
+        .context("template manifest failed to parse")?;
+    parsed
+        .validate(
+            root,
+            ValidateOptions {
+                check_include_dirs: false,
+            },
+        )
+        .context("template manifest failed validation")?;
+
+    let src_dir = root.join("src");
+    let tests_dir = root.join("tests");
+    std::fs::create_dir_all(&src_dir).with_context(|| format!("creating {}", src_dir.display()))?;
+    std::fs::create_dir_all(&tests_dir)
+        .with_context(|| format!("creating {}", tests_dir.display()))?;
+
+    write_file(root.join("Kiln.toml"), &manifest_text)?;
+    write_file(src_dir.join(format!("{name}.sv")), &render_module(name))?;
+    write_file(tests_dir.join(".gitkeep"), "")?;
+    write_file(root.join(".gitignore"), GITIGNORE_TEMPLATE)?;
+    Ok(())
+}
+
+fn write_file(path: PathBuf, contents: &str) -> Result<()> {
+    std::fs::write(&path, contents).with_context(|| format!("writing {}", path.display()))
+}
+
+fn render_manifest(name: &str) -> String {
+    format!(
+        r#"[package]
+name = "{name}"
+version = "0.1.0"
+authors = []
+description = "A new kiln project."
+license = "MIT OR Apache-2.0"
+
+[design]
+top = "{name}"
+sources = ["src/**/*.sv", "src/**/*.svh", "src/**/*.v"]
+include_dirs = []
+defines = {{}}
+
+[dependencies]
+"#
+    )
+}
+
+fn render_module(name: &str) -> String {
+    format!(
+        "// Top-level module for {name}.\n\
+         module {name} (\n\
+         \x20\x20\x20\x20input  logic clk,\n\
+         \x20\x20\x20\x20input  logic rst_n\n\
+         );\n\
+         \n\
+         endmodule\n"
+    )
+}
+
+const GITIGNORE_TEMPLATE: &str = "/target\n";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn template_manifest_parses() {
+        let m = render_manifest("demo").parse::<Manifest>().unwrap();
+        assert_eq!(m.package.name, "demo");
+        assert_eq!(m.design.top, "demo");
+    }
+
+    #[test]
+    fn rendered_module_contains_module_keyword() {
+        let s = render_module("foo");
+        assert!(s.contains("module foo"));
+        assert!(s.contains("endmodule"));
+    }
+}

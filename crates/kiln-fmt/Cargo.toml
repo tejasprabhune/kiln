@@ -1,0 +1,14 @@
+[package]
+name = "kiln-fmt"
+description = "Formatting for kiln (wraps Verible). Stub at M0; populated from M6."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+kiln-core.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
