@@ -1,0 +1,19 @@
+---
+source: crates/kiln-core/src/manifest.rs
+expression: m
+---
+package:
+  name: _internal
+  version: 0.0.1
+  authors: []
+  description: ~
+  license: ~
+design:
+  top: t
+  sources:
+    - src/**/*.sv
+    - src/**/*.svh
+    - src/**/*.v
+  include_dirs: []
+  defines: {}
+dependencies: {}

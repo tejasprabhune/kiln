@@ -1,0 +1,19 @@
+---
+source: crates/kiln-core/src/manifest.rs
+expression: m
+---
+package:
+  name: demo
+  version: 0.1.0
+  authors: []
+  description: ~
+  license: ~
+design:
+  top: demo_top
+  sources:
+    - src/**/*.sv
+    - src/**/*.svh
+    - src/**/*.v
+  include_dirs: []
+  defines: {}
+dependencies: {}

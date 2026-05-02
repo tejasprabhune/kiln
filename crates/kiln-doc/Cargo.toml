@@ -1,0 +1,15 @@
+[package]
+name = "kiln-doc"
+description = "Documentation generation for kiln. Stub at M0; populated from M8."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+kiln-core.workspace = true
+slang-rs.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

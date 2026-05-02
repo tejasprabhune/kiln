@@ -1,0 +1,21 @@
+---
+source: crates/kiln-core/src/manifest.rs
+expression: m
+---
+package:
+  name: widget_v2
+  version: 1.2.3
+  authors:
+    - Jane <jane@example.com>
+  description: A widget
+  license: MIT OR Apache-2.0
+design:
+  top: widget_top
+  sources:
+    - rtl/**/*.sv
+  include_dirs:
+    - rtl/include
+  defines:
+    BAR: ""
+    FOO: "1"
+dependencies: {}
