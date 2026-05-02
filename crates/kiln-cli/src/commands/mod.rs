@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod build;
 mod check_manifest;
 mod new;
 
@@ -37,6 +38,30 @@ enum Command {
         name: Option<String>,
     },
 
+    /// Build the design with Verilator.
+    Build {
+        /// Build with optimization (`-O3`, `--x-assign 0`).
+        #[arg(long)]
+        release: bool,
+        /// Verbose tracing.
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Build and run the simulator binary. Args after `--` are forwarded.
+    Run {
+        #[arg(long)]
+        release: bool,
+        #[arg(short, long)]
+        verbose: bool,
+        /// Arguments forwarded to the simulator binary after `--`.
+        #[arg(last = true)]
+        args: Vec<String>,
+    },
+
+    /// Remove the kiln build cache (`target/kiln/`).
+    Clean,
+
     /// Parse `Kiln.toml` and print the resolved manifest. Used by tests.
     #[command(hide = true)]
     CheckManifest {
@@ -51,6 +76,13 @@ impl Cli {
         match self.command {
             Command::New { name, path } => new::run_new(&name, path.as_deref()),
             Command::Init { name } => new::run_init(name.as_deref()),
+            Command::Build { release, verbose } => build::run_build(release, verbose).map(|_| ()),
+            Command::Run {
+                release,
+                verbose,
+                args,
+            } => build::run_run(release, verbose, args),
+            Command::Clean => build::run_clean(),
             Command::CheckManifest { path } => check_manifest::run(path.as_deref()),
         }
     }

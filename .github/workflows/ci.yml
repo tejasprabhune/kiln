@@ -52,6 +52,32 @@ jobs:
       # by the dedicated `test-e2e-*` jobs below.
       - run: cargo test --workspace
 
+  test-e2e-verilator:
+    name: e2e (verilator on ${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2
+      - name: Install verilator (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y verilator
+      - name: Install verilator (macOS)
+        if: runner.os == 'macOS'
+        run: brew install verilator
+      - name: Verify verilator
+        run: verilator --version
+      - name: Run kiln-cli e2e tests
+        run: cargo test -p kiln-cli --features e2e
+
   test-e2e-slang:
     name: e2e (slang on ${{ matrix.os }})
     strategy:

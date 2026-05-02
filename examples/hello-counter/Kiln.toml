@@ -1,0 +1,14 @@
+[package]
+name = "hello_counter"
+version = "0.1.0"
+authors = []
+description = "4-bit counter with a self-checking testbench."
+license = "MIT OR Apache-2.0"
+
+[design]
+top = "tb"
+sources = ["src/**/*.sv"]
+include_dirs = []
+defines = {}
+
+[dependencies]
