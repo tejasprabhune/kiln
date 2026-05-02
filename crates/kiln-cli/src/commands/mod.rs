@@ -9,6 +9,7 @@ mod check_manifest;
 mod deps;
 mod doc;
 mod fmt;
+mod install_tools;
 mod new;
 mod test;
 mod wave;
@@ -163,6 +164,22 @@ enum Command {
         print_path: bool,
     },
 
+    /// Install the external tools kiln drives (slang, verilator, …).
+    InstallTools {
+        /// Comma-separated list of tools. Defaults to all five.
+        /// Recognised names: bender, verible, surfer, slang, verilator.
+        #[arg(long, value_delimiter = ',')]
+        tools: Option<Vec<String>>,
+        /// Build slang and verilator from source. Without this, the
+        /// command prints instructions for those two and skips them.
+        #[arg(long)]
+        build_from_source: bool,
+        /// Install root. Default: $KILN_TOOLS_DIR or
+        /// $HOME/.local/share/kiln.
+        #[arg(long, value_name = "DIR")]
+        prefix: Option<PathBuf>,
+    },
+
     /// Parse `Kiln.toml` and print the resolved manifest. Used by tests.
     #[command(hide = true)]
     CheckManifest {
@@ -215,6 +232,11 @@ impl Cli {
             } => test::run(filter, jobs, no_fail_fast, list, trace),
             Command::Doc { open } => doc::run(open),
             Command::Wave { test, print_path } => wave::run(test, print_path),
+            Command::InstallTools {
+                tools,
+                build_from_source,
+                prefix,
+            } => install_tools::run(tools, build_from_source, prefix),
             Command::CheckManifest { path } => check_manifest::run(path.as_deref()),
         }
     }
