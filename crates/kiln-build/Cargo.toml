@@ -1,5 +1,5 @@
 [package]
-name = "kiln-build"
+name = "kiln-sv-build"
 description = "Build pipeline and Verilator backend for kiln."
 version.workspace = true
 edition.workspace = true

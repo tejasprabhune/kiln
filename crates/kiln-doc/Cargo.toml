@@ -1,5 +1,5 @@
 [package]
-name = "kiln-doc"
+name = "kiln-sv-doc"
 description = "Documentation generation for kiln. Combines slang's AST with source-level doc comments."
 version.workspace = true
 edition.workspace = true

@@ -1,5 +1,5 @@
 [package]
-name = "kiln-test"
+name = "kiln-sv-test"
 description = "Test discovery and runner for kiln."
 version.workspace = true
 edition.workspace = true

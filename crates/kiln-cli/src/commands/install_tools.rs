@@ -2,14 +2,14 @@
 //!
 //! Three tools install cleanly from prebuilt binaries or pure-Rust crates:
 //!
-//! - **bender** — `cargo install bender --version 0.31.0 --locked`.
-//! - **verible** — prebuilt tarball from chipsalliance/verible releases.
-//! - **surfer** — `cargo install --locked --git https://gitlab.com/surfer-project/surfer.git`.
+//! - **bender**: `cargo install bender --version 0.31.0 --locked`.
+//! - **verible**: prebuilt tarball from chipsalliance/verible releases.
+//! - **surfer**: `cargo install --locked --git https://gitlab.com/surfer-project/surfer.git`.
 //!
 //! Two need a C++ build:
 //!
-//! - **slang** — cmake + C++17 compiler + ninja.
-//! - **verilator** — autoconf + C++ + flex + bison + make + libfl-dev.
+//! - **slang**: cmake + C++17 compiler + ninja.
+//! - **verilator**: autoconf + C++ + flex + bison + make + libfl-dev.
 //!
 //! By default `kiln install-tools` installs the three easy ones and prints
 //! instructions for the two source-only ones. `--build-from-source` opts

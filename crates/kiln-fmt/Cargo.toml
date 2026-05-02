@@ -1,5 +1,5 @@
 [package]
-name = "kiln-fmt"
+name = "kiln-sv-fmt"
 description = "Formatting for kiln. Wraps verible-verilog-format."
 version.workspace = true
 edition.workspace = true

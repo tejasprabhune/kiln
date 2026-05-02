@@ -81,7 +81,7 @@ pub fn most_recent_fst(project_root: &Path) -> Result<PathBuf, WaveError> {
     newest.map(|(_, p)| p).ok_or(WaveError::NoWaves(dir))
 }
 
-/// Open `fst_path` in surfer. Spawns and *detaches* — surfer is a GUI;
+/// Open `fst_path` in surfer. Spawns and *detaches*; surfer is a GUI,
 /// the kiln command should not block on it.
 pub fn open(fst: &Path) -> Result<(), WaveError> {
     let bin = locate_surfer()?;

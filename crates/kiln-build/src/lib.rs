@@ -14,7 +14,7 @@
 //! 3. A backend (today: [`backend::verilator`]) compiles that plan and
 //!    parses the simulator's output into [`Diagnostic`]s.
 //!
-//! This crate is intentionally simulator-agnostic at the type level —
+//! This crate is intentionally simulator-agnostic at the type level;
 //! M5 will plug a Cocotb backend onto the same plan. M3 will reuse
 //! [`Diagnostic`] for the slang-driven `kiln check` rendering path.
 

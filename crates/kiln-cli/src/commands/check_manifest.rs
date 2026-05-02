@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 
 use kiln_core::{find_manifest, Manifest};
 
-/// `kiln check-manifest` — parse and print the manifest. Hidden command,
+/// `kiln check-manifest`: parse and print the manifest. Hidden command,
 /// used by integration tests as a smoke check.
 pub fn run(path: Option<&Path>) -> Result<()> {
     let manifest_path = match path {

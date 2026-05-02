@@ -1,5 +1,5 @@
 [package]
-name = "kiln-core"
+name = "kiln-sv-core"
 description = "Manifest, project model, and shared error types for kiln."
 version.workspace = true
 edition.workspace = true

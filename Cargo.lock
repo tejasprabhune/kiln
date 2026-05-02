@@ -373,13 +373,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "kiln-build"
+name = "kiln-sv-build"
 version = "0.1.0"
 dependencies = [
  "blake3",
  "glob",
  "insta",
- "kiln-core",
+ "kiln-sv-core",
  "serde",
  "serde_json",
  "tempfile",
@@ -389,24 +389,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-cli"
+name = "kiln-sv-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
  "insta",
- "kiln-build",
- "kiln-core",
- "kiln-deps",
- "kiln-doc",
- "kiln-fmt",
- "kiln-lint",
- "kiln-test",
- "kiln-wave",
+ "kiln-sv-build",
+ "kiln-sv-core",
+ "kiln-sv-deps",
+ "kiln-sv-doc",
+ "kiln-sv-fmt",
+ "kiln-sv-lint",
+ "kiln-sv-test",
+ "kiln-sv-wave",
  "predicates",
  "serde_json",
- "slang-rs",
+ "slang-sv-rs",
  "tempfile",
  "toml",
  "tracing",
@@ -416,7 +416,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-core"
+name = "kiln-sv-core"
 version = "0.1.0"
 dependencies = [
  "glob",
@@ -432,12 +432,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-deps"
+name = "kiln-sv-deps"
 version = "0.1.0"
 dependencies = [
  "glob",
  "insta",
- "kiln-core",
+ "kiln-sv-core",
  "serde",
  "serde_json",
  "tempfile",
@@ -448,23 +448,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-doc"
+name = "kiln-sv-doc"
 version = "0.1.0"
 dependencies = [
- "kiln-build",
- "kiln-core",
- "slang-rs",
+ "kiln-sv-build",
+ "kiln-sv-core",
+ "slang-sv-rs",
  "tempfile",
  "thiserror",
  "tracing",
 ]
 
 [[package]]
-name = "kiln-fmt"
+name = "kiln-sv-fmt"
 version = "0.1.0"
 dependencies = [
  "insta",
- "kiln-core",
+ "kiln-sv-core",
  "serde",
  "serde_json",
  "tempfile",
@@ -473,24 +473,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-lint"
+name = "kiln-sv-lint"
 version = "0.1.0"
 dependencies = [
- "kiln-build",
- "kiln-core",
- "slang-rs",
+ "kiln-sv-build",
+ "kiln-sv-core",
+ "slang-sv-rs",
  "tempfile",
  "thiserror",
  "tracing",
 ]
 
 [[package]]
-name = "kiln-test"
+name = "kiln-sv-test"
 version = "0.1.0"
 dependencies = [
- "kiln-build",
- "kiln-core",
- "kiln-deps",
+ "kiln-sv-build",
+ "kiln-sv-core",
+ "kiln-sv-deps",
  "serde",
  "tempfile",
  "thiserror",
@@ -498,10 +498,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "kiln-wave"
+name = "kiln-sv-wave"
 version = "0.1.0"
 dependencies = [
- "kiln-core",
+ "kiln-sv-core",
  "tempfile",
  "thiserror",
  "tracing",
@@ -812,7 +812,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
-name = "slang-rs"
+name = "slang-sv-rs"
 version = "0.1.0"
 dependencies = [
  "insta",

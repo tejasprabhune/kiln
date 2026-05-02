@@ -6,7 +6,7 @@
 //! Pure-Rust subprocess wrapper around the `slang` SystemVerilog compiler CLI.
 //!
 //! `slang-rs` shells out to a `slang` binary that the user installs
-//! separately. It is **not** an FFI binding to libslang — see
+//! separately. It is **not** an FFI binding to libslang; see
 //! `docs/decisions/0001-slang-integration-strategy.md` in the kiln repo.
 //!
 //! # Quick start
