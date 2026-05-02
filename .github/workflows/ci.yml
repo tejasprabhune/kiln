@@ -125,8 +125,34 @@ jobs:
       - name: Add verilator to PATH (Linux)
         if: runner.os == 'Linux'
         run: echo "$HOME/.local/verilator/bin" >> "$GITHUB_PATH"
-      - name: Verify verilator
-        run: verilator --version
+      - name: Cache slang build
+        id: cache-slang-on-verilator
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/slang
+          key: slang-v10.0-${{ matrix.os }}
+      - name: Build slang from source
+        if: steps.cache-slang-on-verilator.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y cmake ninja-build g++
+          fi
+          git clone --depth 1 --branch v10.0 https://github.com/MikePopoloski/slang.git /tmp/slang-src
+          cmake -S /tmp/slang-src -B /tmp/slang-src/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/slang-src/build -j
+          mkdir -p ~/.local/slang/bin
+          cp /tmp/slang-src/build/bin/slang ~/.local/slang/bin/
+      - name: Add slang to PATH
+        run: echo "$HOME/.local/slang/bin" >> "$GITHUB_PATH"
+      - name: Install bender
+        run: cargo install bender --version 0.31.0 --locked
+      - name: Verify tools
+        run: |
+          slang --version
+          verilator --version
+          bender --version
       - name: Run kiln-cli e2e tests
         run: cargo test -p kiln-cli --features e2e
 
