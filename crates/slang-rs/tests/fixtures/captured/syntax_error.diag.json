@@ -1,0 +1,23 @@
+[
+  {
+    "severity": "error",
+    "message": "expected ';'",
+    "location": "syntax_error.sv:1:11"
+  },
+  {
+    "severity": "error",
+    "message": "port declaration 'clk' does not match any port in the module's port list",
+    "location": "syntax_error.sv:2:17",
+    "symbolPath": "bad"
+  },
+  {
+    "severity": "error",
+    "message": "expected ';'",
+    "location": "syntax_error.sv:2:20"
+  },
+  {
+    "severity": "error",
+    "message": "unexpected ')' delimiter",
+    "location": "syntax_error.sv:3:1"
+  }
+]

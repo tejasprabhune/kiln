@@ -66,16 +66,99 @@ locally.
 
 ### Next session pickup
 
-- Begin M1 (slang CLI wrapper). Tasks ordered:
-  1. ADR `0001-slang-integration-strategy.md` (subprocess vs. FFI).
-  2. ADR `0002-slang-version-policy.md` (minimum slang version, source of
-     `slang --version`).
-  3. `Slang` struct + binary discovery + version validation.
-  4. `CompileRequest` builder, `run_slang` helper, `CompileResult` /
-     `Diagnostic` / `Ast` types.
-  5. Captured-output fixtures + unit tests (no slang on PATH required).
-  6. `--features e2e` integration tests gated to CI.
-- Local note: `slang` is **not** installed on the dev machine that ran M0.
-  Unit tests for `slang-rs` will run locally; e2e tests need either a
-  `brew install slang` step or to be deferred to CI. The CI image will need
-  a `slang` install added in M1.
+Continued in this session — see M1 below.
+
+## 2026-05-02 — M1 (Slang CLI wrapper)
+
+**Branch:** `milestone/m1-slang-cli` (stacked on `milestone/m0-foundation`)
+**PR:** opened against `milestone/m0-foundation` (will retarget to `main`
+once M0 is merged)
+
+### Summary
+
+`slang-rs` ships a typed, subprocess-based wrapper around the `slang` CLI.
+`Slang::new()` discovers the binary via `KILN_SLANG_PATH` then `PATH`,
+queries `slang --version`, and validates against `MIN_VERSION = v10.0`.
+`CompileRequest` is a builder; `Slang::compile` writes diag/ast JSON to
+temp files (slang pollutes stdout with a "Top level design units:" preamble
+that would have made stdout-as-JSON brittle). Diagnostics deserialize from
+slang's real `--diag-json` schema; the AST uses a permissive
+`AstNode { kind, name, members, extra: ExtraFields }` shape with a
+`#[serde(flatten)]` escape hatch so unknown / future slang fields don't
+break parsing. CI now builds slang v10 from source and runs the e2e tests.
+
+### Acceptance criteria
+
+| Criterion (per `kiln-milestones.md` §M1) | Status | Evidence |
+| ---------------------------------------- | ------ | -------- |
+| `cargo install --path crates/kiln-cli` succeeds with only Rust toolchain (no cmake / Python / C++) | pass | re-verified locally; M0's pure-Rust property is preserved — `slang-rs` declares no native deps, the C++ toolchain is only needed at runtime to install slang itself |
+| `cargo test -p slang-rs` (no `--features e2e`) passes without slang | pass | 27 lib tests pass against captured fixtures under `crates/slang-rs/tests/fixtures/captured/` |
+| `cargo test -p slang-rs --features e2e` passes on CI with slang | pass | 10 e2e tests pass locally against built-from-source slang v10.0; CI job `test-e2e-slang` builds slang and runs them |
+| slang missing → clear error with platform-specific install hint, snapshot-tested | pass | `crates/slang-rs/src/snapshots/slang_rs__handle__tests__missing_binary_error.snap` |
+| `syntax_error.sv` → diagnostic with correct line | pass | `crates/slang-rs/tests/e2e.rs::syntax_error_pinpoints_missing_semicolon_line` asserts `line == 1` and a "expected `;`" message |
+| `slang-rs` rustdoc renders without warnings | pass | `cargo doc -p slang-rs --no-deps` finished clean |
+
+### Tests in this PR
+
+- 27 unit tests across `version.rs`, `diagnostic.rs`, `ast.rs`,
+  `compile.rs`, `handle.rs` — version parser robustness, location parser,
+  argument-builder coverage, captured-fixture deserialization (incl.
+  unknown-field round-trip), missing-binary error snapshot.
+- 10 `--features e2e` tests in `crates/slang-rs/tests/e2e.rs` — full
+  matrix: clean module, syntax error, width-trunc warning, AST request,
+  `-D` defines (present + missing), `-I` include dir, package + consumer
+  multi-file, language-standard pass-through, version floor.
+- Captured slang JSON under `crates/slang-rs/tests/fixtures/captured/`
+  drives the unit tests deterministically.
+
+### ADRs filed
+
+- `docs/decisions/0001-slang-integration-strategy.md` — **accepted**.
+  Subprocess wrapper, not FFI. Reaffirms M0's pure-Rust install. Sets
+  the rule that all `Command::spawn` calls must funnel through
+  `runner::run_slang`.
+- `docs/decisions/0002-slang-version-policy.md` — **accepted**. Minimum
+  slang version `v10.0`. Permissive version-string parser with explicit
+  bumping policy for minor and major floors.
+
+### Deviations from `kiln-milestones.md`
+
+- **Width-mismatch fixture is gated by `-Wwidth-trunc`.** The milestones
+  doc lists `width_mismatch.sv` as producing a "semantic warning". Slang
+  v10.0 emits the warning only when `-Wwidth-trunc` is explicitly
+  enabled — `-Wall` is **not** a recognised slang option (it produces
+  `unknown warning option '-Wall'`). The e2e test passes
+  `-Wwidth-trunc` directly. This is a slang-side reality, not a
+  workaround; recorded for M3 where the lint config maps onto these
+  per-warning knobs.
+- **Diagnostic format does not include a `code` or `length` field.** The
+  milestones doc anticipates one. Slang v10's `--diag-json` provides
+  `severity`, `message`, `optionName` (warnings only), `location`
+  (string), and an optional `symbolPath`. `slang-rs::Diagnostic` exposes
+  exactly those. If a future slang adds `code` / `length`, they'll
+  round-trip transparently into the existing typed surface (the typed
+  fields are explicit; nothing else is dropped because we don't use
+  `deny_unknown_fields` on `Diagnostic`).
+- **JSON output via files, not stdout.** Slang's `--diag-json -` and
+  `--ast-json -` print to stdout, but slang *also* prints a free-form
+  "Top level design units:" preamble and "Build succeeded/failed" footer
+  to the same stream. We pass real file paths so stdout stays untouched
+  and JSON parsing is deterministic. Documented in the slang-rs README
+  and inline in `handle.rs::compile`.
+
+### Notes carried forward
+
+- The local `slang` binary used to capture fixtures was built from the
+  master branch (reports `slang version 10.0.0+d611a3f`). CI pins
+  `--branch v10.0`. The fixtures will need re-capturing only if the
+  schema changes between v10.0 and master *and* a future test depends on
+  the diff.
+- `examples/hello-counter/` does not yet exist. M2 introduces it; the
+  slang-rs e2e fixtures are sufficient for M1.
+
+### Next session pickup
+
+- Begin M2 (Verilator build pipeline). The cache, source-set resolution,
+  and Verilator output parser are the major chunks.
+- The CI matrix will need a Verilator install step alongside the existing
+  slang one.

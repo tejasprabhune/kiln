@@ -1,0 +1,47 @@
+{
+  "design": {
+    "name": "$root",
+    "kind": "Root",
+    "addr": 4318977760,
+    "members": [
+      {
+        "name": "",
+        "kind": "CompilationUnit",
+        "addr": 6338699007544,
+        "members": [
+          {
+            "name": "my_pkg",
+            "kind": "Package",
+            "addr": 6338699007840,
+            "members": [
+              {
+                "name": "WIDTH",
+                "kind": "Parameter",
+                "addr": 6338699008008,
+                "type": "int",
+                "initializer": {
+                  "kind": "IntegerLiteral",
+                  "type": "int",
+                  "value": "8",
+                  "constant": "8"
+                },
+                "value": "8",
+                "isLocal": true,
+                "isPort": false,
+                "isBody": true
+              },
+              {
+                "name": "data_t",
+                "kind": "TypeAlias",
+                "addr": 6338699008184,
+                "target": "logic[7:0]"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "definitions": [
+  ]
+}

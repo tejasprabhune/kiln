@@ -1,0 +1,7 @@
+---
+source: crates/slang-rs/src/handle.rs
+expression: normalized
+---
+could not find the `slang` binary: `/nonexistent/path/to/slang` is not a file.
+Install slang and ensure it is on your PATH, or set `KILN_SLANG_PATH`.
+[install hint redacted for snapshot]
