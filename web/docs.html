@@ -15,6 +15,7 @@
     <nav>
       <a href="index.html">Overview</a>
       <a href="docs.html" class="active">Docs</a>
+      <a href="reference.html">Reference</a>
       <a href="https://github.com/tejasprabhune/kiln">GitHub</a>
       <a href="https://crates.io/crates/kiln-sv">crates.io</a>
       <a href="https://docs.rs/kiln-sv">docs.rs</a>
@@ -201,9 +202,6 @@ top          = "counter"
 sources      = ["src/**/*.sv"]     <span class="comment"># default: src/**/*.sv + .v + .svh</span>
 include_dirs = ["include"]         <span class="comment"># passed as -I to slang and verilator</span>
 defines      = { SIMULATION = "" } <span class="comment"># +define+ flags</span>
-
-[profile.release]
-defines = { SYNTHESIS = "" }       <span class="comment"># override defines for kiln build --release</span>
 
 [dependencies]
 axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }

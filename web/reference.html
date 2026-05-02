@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>kiln — reference</title>
+  <link rel="stylesheet" href="https://use.typekit.net/bsk0vur.css">
+  <link rel="stylesheet" href="shared.css">
+  <style>
+    .field-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      margin: 14px 0 24px;
+    }
+
+    .field-table th {
+      text-align: left;
+      font-weight: 700;
+      padding: 7px 16px 7px 0;
+      border-bottom: 1px solid rgba(139, 90, 60, 0.2);
+      color: var(--brown);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .field-table td {
+      padding: 8px 16px 8px 0;
+      border-bottom: 1px solid rgba(139, 90, 60, 0.08);
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    .field-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .field-table td:first-child code {
+      font-weight: 700;
+    }
+
+    .req {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--brown);
+    }
+
+    .opt {
+      font-size: 11px;
+      color: var(--tan);
+    }
+
+    .default {
+      color: var(--tan);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a class="wordmark" href="index.html">KILN</a>
+    <p class="tagline">A Cargo-style CLI for SystemVerilog</p>
+    <nav>
+      <a href="index.html">Overview</a>
+      <a href="docs.html">Docs</a>
+      <a href="reference.html" class="active">Reference</a>
+      <a href="https://github.com/tejasprabhune/kiln">GitHub</a>
+      <a href="https://crates.io/crates/kiln-sv">crates.io</a>
+      <a href="https://docs.rs/kiln-sv">docs.rs</a>
+    </nav>
+  </header>
+
+  <!-- [package] -->
+  <h2><code>[package]</code></h2>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>name</code></td>
+        <td><span class="req">required</span></td>
+        <td>string</td>
+        <td>Valid SystemVerilog identifier: starts with a letter or <code>_</code>, followed by letters, digits, or <code>_</code>.</td>
+      </tr>
+      <tr>
+        <td><code>version</code></td>
+        <td><span class="req">required</span></td>
+        <td>string</td>
+        <td>Semver string, e.g. <code>"0.1.0"</code>.</td>
+      </tr>
+      <tr>
+        <td><code>authors</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td>Free-form. E.g. <code>["Jane &lt;jane@example.com&gt;"]</code>.</td>
+      </tr>
+      <tr>
+        <td><code>description</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>string</td>
+        <td>Single-line description.</td>
+      </tr>
+      <tr>
+        <td><code>license</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>string</td>
+        <td>SPDX expression, e.g. <code>"MIT OR Apache-2.0"</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- [design] -->
+  <h2><code>[design]</code></h2>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>top</code></td>
+        <td><span class="req">required</span></td>
+        <td>string</td>
+        <td></td>
+      </tr>
+      <tr>
+        <td><code>sources</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of glob strings</td>
+        <td><span class="default"><code>["src/**/*.sv", "src/**/*.svh", "src/**/*.v"]</code></span></td>
+      </tr>
+      <tr>
+        <td><code>include_dirs</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of paths</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+      <tr>
+        <td><code>defines</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>string-to-string map</td>
+        <td><span class="default"><code>{}</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    Globs are evaluated relative to the directory containing <code>Kiln.toml</code>.
+    <code>include_dirs</code> entries must exist on disk when the manifest is loaded
+    (the check is skipped during <code>kiln new</code>).
+    <code>defines</code> entries with an empty string value become valueless
+    <code>+define+FOO</code> flags; non-empty values become <code>+define+FOO=bar</code>.
+  </p>
+  <pre><code>[design]
+top          = "my_top"
+sources      = ["rtl/**/*.sv", "rtl/**/*.v", "ip/**/*.sv"]
+include_dirs = ["rtl/include", "ip/include"]
+defines      = { SIMULATION = "", WIDTH = "8" }</code></pre>
+
+  <!-- [dependencies] -->
+  <h2><code>[dependencies]</code></h2>
+  <p>Each entry is a named dependency in one of three forms:</p>
+  <pre><code>[dependencies]
+<span class="comment"># git dep with semver constraint (matched against repo tags)</span>
+axi = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }
+
+<span class="comment"># git dep pinned to a specific tag or commit SHA</span>
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", rev = "v1.32.0" }
+
+<span class="comment"># path dep relative to the project root (or absolute)</span>
+local_ip = { path = "../local_ip" }</code></pre>
+  <p>
+    Resolved versions are written to <code>Kiln.lock</code>, which should be committed.
+    Use <code>kiln update</code> to refresh it.
+  </p>
+
+  <!-- [lint] -->
+  <h2><code>[lint]</code></h2>
+  <p>
+    Per-diagnostic severity overrides. Keys are slang's diagnostic option names
+    (the same strings passed to <code>-W&lt;name&gt;</code> on the slang CLI).
+    Values are <code>"error"</code>, <code>"warn"</code>, or <code>"allow"</code>.
+  </p>
+  <pre><code>[lint]
+timescale-missing    = "allow"   <span class="comment"># suppress missing-timescale warnings</span>
+width-trunc          = "error"   <span class="comment"># promote truncation warnings to errors</span>
+unused-net           = "warn"
+implicit-net         = "allow"</code></pre>
+
+  <h3>Common diagnostic names</h3>
+  <table class="field-table">
+    <thead>
+      <tr><th>Name</th><th>Default</th><th>What it covers</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>timescale-missing</code></td><td>warn</td><td>No <code>`timescale</code> directive before a time-sensitive construct. Suppress this if your simulator sets a default timescale.</td></tr>
+      <tr><td><code>width-trunc</code></td><td>warn</td><td>Implicit truncation when assigning a wider value to a narrower type.</td></tr>
+      <tr><td><code>width-expand</code></td><td>warn</td><td>Implicit zero- or sign-extension when assigning to a wider type.</td></tr>
+      <tr><td><code>implicit-net</code></td><td>warn</td><td>Net used without an explicit declaration (relies on implicit-wire rules).</td></tr>
+      <tr><td><code>unused-net</code></td><td>warn</td><td>Net declared but never driven or read.</td></tr>
+      <tr><td><code>unused-variable</code></td><td>warn</td><td>Variable declared but never written or read.</td></tr>
+      <tr><td><code>unused-import</code></td><td>warn</td><td>Package imported with <code>import pkg::*</code> but nothing from it is used.</td></tr>
+      <tr><td><code>unused-typedef</code></td><td>warn</td><td>Typedef declared but never referenced.</td></tr>
+      <tr><td><code>unused-param</code></td><td>warn</td><td>Parameter declared but never referenced.</td></tr>
+      <tr><td><code>always-comb-blocking</code></td><td>warn</td><td>Blocking assignment (<code>=</code>) inside <code>always_comb</code>.</td></tr>
+      <tr><td><code>always-ff-blocking</code></td><td>warn</td><td>Blocking assignment (<code>=</code>) inside <code>always_ff</code>.</td></tr>
+      <tr><td><code>case-incomplete</code></td><td>warn</td><td><code>case</code> statement does not cover all possible values and has no <code>default</code>.</td></tr>
+      <tr><td><code>cast-truncates</code></td><td>warn</td><td>Explicit cast that results in truncation.</td></tr>
+      <tr><td><code>sign-compare</code></td><td>warn</td><td>Comparison between signed and unsigned values.</td></tr>
+      <tr><td><code>empty-body</code></td><td>warn</td><td>Empty body in an <code>if</code>, <code>while</code>, or similar construct.</td></tr>
+      <tr><td><code>port-coercion</code></td><td>warn</td><td>Type coercion at a port connection boundary.</td></tr>
+      <tr><td><code>unconnected-port</code></td><td>warn</td><td>Instance port left unconnected without <code>.*</code> or explicit <code>.port()</code>.</td></tr>
+      <tr><td><code>missing-port</code></td><td>error</td><td>Required port in an instance connection is missing entirely.</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Any diagnostic name accepted by <code>slang -W&lt;name&gt;</code> is valid here.
+    Run <code>slang --help-diagnostics</code> for the full list.
+    Setting a rule to <code>"error"</code> or <code>"warn"</code> also passes
+    <code>-W&lt;name&gt;</code> to slang so diagnostics slang would normally suppress
+    at the default level are surfaced. <code>"allow"</code> is post-filtering:
+    the diagnostic still reaches kiln but is dropped before rendering.
+  </p>
+
+  <!-- [wave] -->
+  <h2><code>[wave]</code></h2>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>format</code></td>
+        <td><span class="opt">optional</span></td>
+        <td><code>"fst"</code> | <code>"vcd"</code></td>
+        <td><span class="default"><code>"fst"</code></span></td>
+      </tr>
+      <tr>
+        <td><code>enabled_by_default</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>bool</td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    When <code>enabled_by_default = true</code>, every <code>kiln test</code> run
+    behaves as if <code>--trace</code> was passed. FST is smaller and faster than VCD;
+    prefer it unless your waveform viewer requires VCD.
+  </p>
+  <pre><code>[wave]
+format             = "fst"
+enabled_by_default = false</code></pre>
+
+  <!-- Full example -->
+  <h2>Complete example</h2>
+  <pre><code>[package]
+name        = "counter"
+version     = "0.1.0"
+authors     = ["Tejas Prabhune &lt;prabhune@berkeley.edu&gt;"]
+description = "A parameterized up/down counter"
+license     = "MIT OR Apache-2.0"
+
+[design]
+top          = "counter"
+sources      = ["src/**/*.sv"]
+include_dirs = ["include"]
+defines      = { SIMULATION = "" }
+
+[dependencies]
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.32" }
+
+[lint]
+timescale-missing    = "allow"
+width-trunc          = "error"
+unused-net           = "warn"
+implicit-net         = "allow"
+
+[wave]
+format             = "fst"
+enabled_by_default = false</code></pre>
+
+  <footer>
+    <a href="https://github.com/tejasprabhune/kiln">GitHub</a>
+    <a href="https://github.com/tejasprabhune/kiln/blob/main/LICENSE-MIT">MIT</a>
+    <a href="https://github.com/tejasprabhune/kiln/blob/main/LICENSE-APACHE">Apache-2.0</a>
+  </footer>
+
+</body>
+</html>
