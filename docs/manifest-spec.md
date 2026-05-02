@@ -62,6 +62,28 @@ because the project has not yet been created.
 Empty in M0. Populated in M4 with git, path, and version-based dependencies.
 See `kiln-milestones.md` §M4 for the planned schema.
 
+## `[lint]`
+
+Per-diagnostic severity overrides. Keys are slang's `optionName` strings
+(e.g. `width-trunc`, `unused-net`). Values are one of:
+
+- `"error"` — promote to `Error`. `kiln check` fails (exit 2).
+- `"warn"`  — emit as `Warning`.
+- `"allow"` — drop the diagnostic entirely.
+
+```toml
+[lint]
+width-trunc  = "error"
+unused-net   = "warn"
+implicit-net = "allow"
+```
+
+Setting any rule to `"error"` or `"warn"` also passes the corresponding
+`-W<id>` to slang, so warnings slang would otherwise silence at the
+default level surface and can be acted on. `"allow"` is post-filtering;
+the diagnostic still travels from slang to `kiln-lint` but is dropped
+before rendering.
+
 ## Validation rules (M0)
 
 The parser rejects manifests that violate any of:

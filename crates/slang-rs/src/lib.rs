@@ -48,7 +48,7 @@ mod version;
 
 pub use ast::{Ast, AstNode, ExtraFields};
 pub use compile::{CompileRequest, CompileRequestBuilder, CompileResult, SvStandard};
-pub use diagnostic::{Diagnostic, Severity};
+pub use diagnostic::{Diagnostic, Location, Severity};
 pub use error::SlangError;
 pub use handle::{Slang, MIN_VERSION};
 pub use version::SlangVersion;

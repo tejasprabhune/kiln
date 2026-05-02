@@ -4,6 +4,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 mod build;
+mod check;
 mod check_manifest;
 mod new;
 
@@ -36,6 +37,15 @@ enum Command {
         /// The package name. Defaults to the directory name.
         #[arg(long)]
         name: Option<String>,
+    },
+
+    /// Run a fast slang elaboration check (no Verilator).
+    Check {
+        /// Treat warnings as failures.
+        #[arg(long)]
+        deny_warnings: bool,
+        #[arg(short, long)]
+        verbose: bool,
     },
 
     /// Build the design with Verilator.
@@ -76,6 +86,10 @@ impl Cli {
         match self.command {
             Command::New { name, path } => new::run_new(&name, path.as_deref()),
             Command::Init { name } => new::run_init(name.as_deref()),
+            Command::Check {
+                deny_warnings,
+                verbose,
+            } => check::run(deny_warnings, verbose),
             Command::Build { release, verbose } => build::run_build(release, verbose).map(|_| ()),
             Command::Run {
                 release,

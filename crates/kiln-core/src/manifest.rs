@@ -50,6 +50,28 @@ pub struct Manifest {
     pub design: Design,
     #[serde(default)]
     pub dependencies: BTreeMap<String, toml::Value>,
+    #[serde(default)]
+    pub lint: LintConfig,
+}
+
+/// `[lint]` table. Severity overrides per slang diagnostic ID.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LintConfig {
+    /// Map of slang diagnostic ID → severity override.
+    /// Keys are slang's `optionName` strings (e.g. `width-trunc`).
+    /// `error | warn | allow`. All entries in `[lint]` land here via
+    /// `#[serde(flatten)]`; that's why we don't use
+    /// `deny_unknown_fields` on this struct (we *want* every key).
+    #[serde(flatten)]
+    pub rules: BTreeMap<String, LintSeverity>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LintSeverity {
+    Error,
+    Warn,
+    Allow,
 }
 
 /// `[package]` table.
