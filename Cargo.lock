@@ -399,6 +399,7 @@ dependencies = [
  "kiln-build",
  "kiln-core",
  "kiln-deps",
+ "kiln-doc",
  "kiln-fmt",
  "kiln-lint",
  "kiln-test",
@@ -450,8 +451,10 @@ dependencies = [
 name = "kiln-doc"
 version = "0.1.0"
 dependencies = [
+ "kiln-build",
  "kiln-core",
  "slang-rs",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

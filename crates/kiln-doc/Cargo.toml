@@ -1,6 +1,6 @@
 [package]
 name = "kiln-doc"
-description = "Documentation generation for kiln. Stub at M0; populated from M8."
+description = "Documentation generation for kiln. Combines slang's AST with source-level doc comments."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,13 @@ authors.workspace = true
 
 [dependencies]
 kiln-core.workspace = true
+kiln-build.workspace = true
 slang-rs.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+e2e = []
