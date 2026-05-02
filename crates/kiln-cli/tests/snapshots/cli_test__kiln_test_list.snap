@@ -1,0 +1,6 @@
+---
+source: crates/kiln-cli/tests/cli_test.rs
+expression: "String::from_utf8_lossy(&out).trim().to_string()"
+---
+parity
+smoke

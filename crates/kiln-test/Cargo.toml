@@ -1,6 +1,6 @@
 [package]
 name = "kiln-test"
-description = "Test runner for kiln. Stub at M0; populated from M5."
+description = "Test discovery and runner for kiln."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,5 +11,13 @@ authors.workspace = true
 [dependencies]
 kiln-core.workspace = true
 kiln-build.workspace = true
+kiln-deps.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+e2e = []
