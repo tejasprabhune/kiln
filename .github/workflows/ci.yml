@@ -18,7 +18,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.93"
           components: rustfmt
       - run: cargo fmt --all -- --check
 
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.93"
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-targets --all-features -- -D warnings
@@ -45,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.93"
       - uses: Swatinem/rust-cache@v2
       # Default-features only. The `e2e` features in slang-rs and
       # kiln-cli require `slang` / `verilator` on PATH and are exercised
@@ -63,8 +63,35 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.93"
       - uses: Swatinem/rust-cache@v2
+<<<<<<< HEAD
+=======
+      # `kiln-cli`'s e2e tests cover both `kiln build`/`run` (verilator)
+      # and `kiln check` (slang). Build slang too — same recipe as the
+      # standalone `test-e2e-slang` job below, cached on the same key.
+      - name: Cache slang build
+        id: cache-slang
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/slang
+          key: slang-v10.0-${{ matrix.os }}
+      - name: Build slang from source
+        if: steps.cache-slang.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y cmake ninja-build g++
+          fi
+          git clone --depth 1 --branch v10.0 https://github.com/MikePopoloski/slang.git /tmp/slang-src
+          cmake -S /tmp/slang-src -B /tmp/slang-src/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/slang-src/build -j
+          mkdir -p ~/.local/slang/bin
+          cp /tmp/slang-src/build/bin/slang ~/.local/slang/bin/
+      - name: Add slang to PATH
+        run: echo "$HOME/.local/slang/bin" >> "$GITHUB_PATH"
+>>>>>>> 1b3983e (fix(ci): split e2e into per-tool jobs, bump MSRV to 1.93, drop CI badge)
       - name: Install verilator (macOS)
         if: runner.os == 'macOS'
         run: brew install verilator
@@ -76,9 +103,14 @@ jobs:
           path: ~/.local/verilator
           key: verilator-v5.026-ubuntu-22.04
       - name: Build verilator from source (Linux)
+<<<<<<< HEAD
         # Ubuntu 22.04's apt verilator is 4.038, which doesn't support
         # the --binary flag introduced in Verilator 5.0. Build v5.026
         # from source instead, cached.
+=======
+        # Ubuntu 22.04 apt has Verilator 4.038, which predates `--binary`
+        # (introduced in 5.0). Build v5.026 from source, cached.
+>>>>>>> 1b3983e (fix(ci): split e2e into per-tool jobs, bump MSRV to 1.93, drop CI badge)
         if: runner.os == 'Linux' && steps.cache-verilator.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
@@ -109,7 +141,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.85"
+          toolchain: "1.93"
       - uses: Swatinem/rust-cache@v2
       - name: Cache slang build
         id: cache-slang

@@ -29,16 +29,34 @@ will appear with the next `serde`/`anyhow`/`clap` minor as upstreams catch up.
 
 ## Decision
 
-Bump MSRV from `1.75` → `1.85` and update `rust-toolchain.toml` and every
-`rust-version` field accordingly. Update CI to install `1.85`.
+Bump MSRV from `1.75` → `1.93` (current stable as of 2026-05) and update
+`rust-toolchain.toml` and every `rust-version` field accordingly. CI
+installs `1.93`.
 
-This deviates from `kiln-milestones.md` §1.1. The deviation is small (10
-minor versions, nine months of toolchain age as of 2026-05) and removes a
-hard build blocker that would otherwise force a fragile transitive-pin
-strategy across every milestone.
+This deviates from `kiln-milestones.md` §1.1. The deviation is roughly 18
+months of toolchain age and removes a hard build blocker that would
+otherwise force a fragile transitive-pin strategy across every milestone.
 
-The milestones doc's `MSRV: 1.75` will be left as written; this ADR is the
+Since `kiln` ships pre-built binaries (planned M9), end users do not need a
+recent Rust to install it. Contributors do; pinning at the latest stable
+keeps us out of the MSRV-policing business and lets us pick up new clippy
+diagnostics, language features, and stdlib improvements as they ship.
+
+Bumping the floor in the future:
+- Bumping minor (e.g. `1.93 → 1.95`) when a new stable lands: trivial PR,
+  no ADR needed.
+- Bumping the rust-toolchain channel to `stable` (track-without-pin) would
+  require a follow-up ADR documenting why we accept the resulting CI
+  flakiness from clippy lints landing without warning.
+
+The milestones doc's `MSRV: 1.75` is left as written; this ADR is the
 operative source for MSRV and supersedes that line.
+
+### Revision history
+
+- 2026-05-02 (original): bumped to `1.85` to cross the `edition2024` line.
+- 2026-05-02 (this revision): bumped further to `1.93` per maintainer
+  preference for tracking the latest stable.
 
 ## Consequences
 

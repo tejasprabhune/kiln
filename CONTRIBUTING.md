@@ -5,7 +5,7 @@ and the architecture-decision-record (ADR) process.
 
 ## Local setup
 
-You need a Rust toolchain (1.85+, pinned in `rust-toolchain.toml`; see ADR
+You need a Rust toolchain (1.93+, pinned in `rust-toolchain.toml`; see ADR
 `docs/decisions/0000-msrv-policy.md` for why we deviated from the milestones
 doc's stated 1.75). For
 runtime functionality you also need the external tools `kiln` invokes:
