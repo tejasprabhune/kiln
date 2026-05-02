@@ -22,15 +22,15 @@ repository = "https://github.com/tejasprabhune/kiln"
 authors = ["Tejas Prabhune <tejas.prabhune@gmail.com>"]
 
 [workspace.dependencies]
-kiln-core  = { path = "crates/kiln-core",  package = "kiln-sv-core"  }
-kiln-build = { path = "crates/kiln-build", package = "kiln-sv-build" }
-kiln-deps  = { path = "crates/kiln-deps",  package = "kiln-sv-deps"  }
-kiln-lint  = { path = "crates/kiln-lint",  package = "kiln-sv-lint"  }
-kiln-fmt   = { path = "crates/kiln-fmt",   package = "kiln-sv-fmt"   }
-kiln-test  = { path = "crates/kiln-test",  package = "kiln-sv-test"  }
-kiln-wave  = { path = "crates/kiln-wave",  package = "kiln-sv-wave"  }
-kiln-doc   = { path = "crates/kiln-doc",   package = "kiln-sv-doc"   }
-slang-rs   = { path = "crates/slang-rs",   package = "slang-sv-rs"   }
+kiln-core  = { path = "crates/kiln-core",  package = "kiln-sv-core",  version = "0.1.0" }
+kiln-build = { path = "crates/kiln-build", package = "kiln-sv-build", version = "0.1.0" }
+kiln-deps  = { path = "crates/kiln-deps",  package = "kiln-sv-deps",  version = "0.1.0" }
+kiln-lint  = { path = "crates/kiln-lint",  package = "kiln-sv-lint",  version = "0.1.0" }
+kiln-fmt   = { path = "crates/kiln-fmt",   package = "kiln-sv-fmt",   version = "0.1.0" }
+kiln-test  = { path = "crates/kiln-test",  package = "kiln-sv-test",  version = "0.1.0" }
+kiln-wave  = { path = "crates/kiln-wave",  package = "kiln-sv-wave",  version = "0.1.0" }
+kiln-doc   = { path = "crates/kiln-doc",   package = "kiln-sv-doc",   version = "0.1.0" }
+slang-rs   = { path = "crates/slang-rs",   package = "slang-sv-rs",   version = "0.1.0" }
 
 anyhow = "1.0"
 thiserror = "1.0"
