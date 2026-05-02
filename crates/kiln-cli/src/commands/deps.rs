@@ -7,6 +7,8 @@ use anyhow::{anyhow, Context, Result};
 use kiln_core::{find_manifest, Manifest};
 use kiln_deps::Dependency;
 
+use crate::reporter;
+
 fn project_paths() -> Result<(PathBuf, PathBuf)> {
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;
@@ -41,23 +43,30 @@ pub fn run_add(
             anyhow::bail!("provide either `--git <url>` or `--path <dir>`")
         }
     };
+    let summary = match &dep {
+        Dependency::Git { git, .. } => format!("`{name}` from {git}"),
+        Dependency::Path { path } => format!("`{name}` (path = {})", path.display()),
+    };
+    reporter::status("Adding", &summary);
     kiln_deps::add(&project_root, &manifest_path, &name, dep)?;
-    println!("Added dependency `{name}`");
+    reporter::status("Updated", "`Kiln.toml` and `Kiln.lock`");
     Ok(())
 }
 
 pub fn run_remove(name: String) -> Result<()> {
     let (project_root, manifest_path) = project_paths()?;
+    reporter::status("Removing", format!("`{name}`"));
     kiln_deps::remove(&project_root, &manifest_path, &name)?;
-    println!("Removed dependency `{name}`");
+    reporter::status("Updated", "`Kiln.toml` and `Kiln.lock`");
     Ok(())
 }
 
 pub fn run_update() -> Result<()> {
     let (project_root, manifest_path) = project_paths()?;
     let manifest = Manifest::load(&manifest_path)?;
+    reporter::status("Updating", "dependency lockfile");
     kiln_deps::update(&project_root, &manifest)?;
-    println!("Updated `Kiln.lock`");
+    reporter::status("Updated", "`Kiln.lock`");
     Ok(())
 }
 
@@ -65,6 +74,7 @@ pub fn run_tree() -> Result<()> {
     let (project_root, manifest_path) = project_paths()?;
     let manifest = Manifest::load(&manifest_path)?;
     let tree = kiln_deps::tree(&project_root, &manifest)?;
+    // Tree output is data; goes to stdout for piping. Skip a status header.
     print!("{tree}");
     Ok(())
 }

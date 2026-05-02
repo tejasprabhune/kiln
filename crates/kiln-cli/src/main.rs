@@ -1,19 +1,29 @@
+use std::error::Error;
 use std::process::ExitCode;
 
 use clap::Parser;
 
 mod commands;
 mod render;
+mod reporter;
 
 use commands::Cli;
 
 fn main() -> ExitCode {
     init_tracing();
     let cli = Cli::parse();
+    reporter::Reporter::init(cli.global_verbose());
     match cli.run() {
         Ok(()) => ExitCode::SUCCESS,
         Err(err) => {
-            eprintln!("error: {err:#}");
+            // Pretty-print every cause level with an `error:` prefix and
+            // dim continuation arrows.
+            reporter::error(&err);
+            let mut source: Option<&dyn Error> = err.source();
+            while let Some(s) = source {
+                eprintln!("       {} {s}", reporter::dim("↳"));
+                source = s.source();
+            }
             ExitCode::FAILURE
         }
     }

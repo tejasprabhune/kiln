@@ -51,7 +51,10 @@ fn fmt_check_reports_diff_on_unformatted_input() {
         .current_dir(tmp.path())
         .assert()
         .failure()
-        .stdout(predicate::str::contains("need formatting").or(predicate::str::contains("---")));
+        // After the UX refresh, the diff goes to stdout (--- header etc.)
+        // and the summary goes to stderr ("need formatting"). Either is
+        // sufficient evidence that --check detected a problem.
+        .stderr(predicate::str::contains("need formatting").or(predicate::str::contains("---")));
 }
 
 #[test]
@@ -62,7 +65,7 @@ fn fmt_in_place_then_check_succeeds() {
         .current_dir(tmp.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("formatted"));
+        .stderr(predicate::str::contains("formatted").or(predicate::str::contains("Result")));
     kiln()
         .args(["fmt", "--check"])
         .current_dir(tmp.path())

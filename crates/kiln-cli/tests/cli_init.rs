@@ -17,7 +17,7 @@ fn init_uses_directory_name_as_package_name() {
         .current_dir(&project)
         .assert()
         .success()
-        .stdout(predicate::str::contains(
+        .stderr(predicate::str::contains(
             "Initialized kiln project `counter_top`",
         ));
 

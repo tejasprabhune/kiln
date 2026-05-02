@@ -4,6 +4,8 @@ use anyhow::{anyhow, bail, Context, Result};
 
 use kiln_core::{Manifest, ValidateOptions};
 
+use crate::reporter;
+
 /// `kiln new <name>` — create a new project at `<base>/<name>/`.
 pub fn run_new(name: &str, base: Option<&Path>) -> Result<()> {
     let base = match base {
@@ -17,7 +19,13 @@ pub fn run_new(name: &str, base: Option<&Path>) -> Result<()> {
     std::fs::create_dir_all(&target)
         .with_context(|| format!("creating project directory {}", target.display()))?;
     write_template(&target, name)?;
-    println!("Created kiln project `{name}` at {}", target.display());
+    reporter::status(
+        "Created",
+        format!(
+            "kiln project `{name}` at {}",
+            reporter::dim(&target.display().to_string())
+        ),
+    );
     Ok(())
 }
 
@@ -36,9 +44,12 @@ pub fn run_init(name: Option<&str>) -> Result<()> {
         bail!("`Kiln.toml` already exists in {}", cwd.display());
     }
     write_template(&cwd, &derived_name)?;
-    println!(
-        "Initialized kiln project `{derived_name}` in {}",
-        cwd.display()
+    reporter::status(
+        "Initialized",
+        format!(
+            "kiln project `{derived_name}` in {}",
+            reporter::dim(&cwd.display().to_string())
+        ),
     );
     Ok(())
 }

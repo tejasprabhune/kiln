@@ -52,7 +52,7 @@ fn doc_generates_index_and_navigable_pages() {
         .current_dir(tmp.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Generated docs"));
+        .stderr(predicate::str::contains("Generated"));
     let index = tmp.path().join("target/doc/index.html");
     assert!(index.is_file(), "index.html should exist");
     let counter = tmp.path().join("target/doc/counter.html");

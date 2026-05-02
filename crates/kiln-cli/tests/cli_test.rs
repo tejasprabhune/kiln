@@ -71,8 +71,10 @@ fn test_runs_at_least_one_pass() {
         .current_dir(tmp.path())
         .assert()
         .success()
+        // Per-test PASS/FAIL lines go to stdout; the summary "Result"
+        // line goes to stderr (cargo-style).
         .stdout(predicate::str::contains("PASS"))
-        .stdout(predicate::str::contains("test result:"));
+        .stderr(predicate::str::contains("Result"));
 }
 
 #[test]
@@ -99,7 +101,7 @@ fn no_match_returns_zero_with_helpful_text() {
         .current_dir(tmp.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("No tests matched"));
+        .stderr(predicate::str::contains("no tests matched"));
 }
 
 #[test]

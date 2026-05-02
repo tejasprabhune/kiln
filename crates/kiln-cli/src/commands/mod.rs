@@ -22,8 +22,19 @@ mod wave;
     propagate_version = true
 )]
 pub struct Cli {
+    /// Verbose output. Surfaces cache hits, subprocess invocations, and
+    /// other dimmed status lines that are otherwise hidden.
+    #[arg(short, long, global = true)]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Command,
+}
+
+impl Cli {
+    pub fn global_verbose(&self) -> bool {
+        self.verbose
+    }
 }
 
 #[derive(Debug, Subcommand)]
