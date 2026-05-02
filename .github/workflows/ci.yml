@@ -148,11 +148,30 @@ jobs:
         run: echo "$HOME/.local/slang/bin" >> "$GITHUB_PATH"
       - name: Install bender
         run: cargo install bender --version 0.31.0 --locked
+      - name: Install verible (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.local/verible
+          curl -sL -o /tmp/verible.tar.gz \
+            "https://github.com/chipsalliance/verible/releases/download/v0.0-4053-g89d4d98a/verible-v0.0-4053-g89d4d98a-linux-static-x86_64.tar.gz"
+          tar -xzf /tmp/verible.tar.gz -C ~/.local/verible --strip-components=1
+          echo "$HOME/.local/verible/bin" >> "$GITHUB_PATH"
+      - name: Install verible (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.local/verible
+          curl -sL -o /tmp/verible.tar.gz \
+            "https://github.com/chipsalliance/verible/releases/download/v0.0-4053-g89d4d98a/verible-v0.0-4053-g89d4d98a-macOS.tar.gz"
+          tar -xzf /tmp/verible.tar.gz -C ~/.local/verible --strip-components=1
+          echo "$HOME/.local/verible/bin" >> "$GITHUB_PATH"
       - name: Verify tools
         run: |
           slang --version
           verilator --version
           bender --version
+          verible-verilog-format --version
       - name: Run kiln-cli e2e tests
         run: cargo test -p kiln-cli --features e2e
 

@@ -7,6 +7,7 @@ mod build;
 mod check;
 mod check_manifest;
 mod deps;
+mod fmt;
 mod new;
 mod test;
 
@@ -105,6 +106,16 @@ enum Command {
     /// Print the dependency tree.
     Tree,
 
+    /// Format SystemVerilog sources via verible-verilog-format.
+    Fmt {
+        /// Don't write changes; exit non-zero if any file would change.
+        #[arg(long)]
+        check: bool,
+        /// Output format. `plain` is human-readable; `json` is for tools.
+        #[arg(long, value_parser = ["plain", "json"], default_value = "plain")]
+        format: String,
+    },
+
     /// Discover and run testbenches.
     Test {
         /// Substring filter on test names.
@@ -156,6 +167,13 @@ impl Cli {
             Command::Remove { name } => deps::run_remove(name),
             Command::Update => deps::run_update(),
             Command::Tree => deps::run_tree(),
+            Command::Fmt { check, format } => {
+                let f = match format.as_str() {
+                    "json" => fmt::OutputFormat::Json,
+                    _ => fmt::OutputFormat::Plain,
+                };
+                fmt::run(check, f)
+            }
             Command::Test {
                 filter,
                 jobs,
