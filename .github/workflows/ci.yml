@@ -78,7 +78,7 @@ jobs:
           fi
           git clone --depth 1 --branch v10.0 https://github.com/MikePopoloski/slang.git /tmp/slang-src
           cmake -S /tmp/slang-src -B /tmp/slang-src/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/slang-src/build -j
+          cmake --build /tmp/slang-src/build -j2
           mkdir -p ~/.local/slang/bin
           cp /tmp/slang-src/build/bin/slang ~/.local/slang/bin/
       - name: Add slang to PATH
@@ -166,7 +166,7 @@ jobs:
           fi
           git clone --depth 1 --branch v10.0 https://github.com/MikePopoloski/slang.git /tmp/slang-src
           cmake -S /tmp/slang-src -B /tmp/slang-src/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/slang-src/build -j
+          cmake --build /tmp/slang-src/build -j2
           mkdir -p ~/.local/slang/bin
           cp /tmp/slang-src/build/bin/slang ~/.local/slang/bin/
       - name: Add slang to PATH
