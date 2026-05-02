@@ -5,211 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>kiln: a Cargo-style CLI for SystemVerilog</title>
   <link rel="stylesheet" href="https://use.typekit.net/bsk0vur.css">
-  <style>
-    *, *::before, *::after {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    :root {
-      --cream:      #FFF8F0;
-      --tan:        #C08552;
-      --brown:      #8C5A3C;
-      --dark:       #4B2E2B;
-    }
-
-    html {
-      background: var(--cream);
-      color: var(--dark);
-      font-family: "neue-haas-unica", sans-serif;
-      font-weight: 400;
-      font-style: normal;
-      font-size: 16px;
-      line-height: 1.65;
-    }
-
-    body {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 80px 32px 120px;
-    }
-
-    header {
-      margin-bottom: 56px;
-    }
-
-    .wordmark {
-      font-family: "nimbus-roman", serif;
-      font-weight: 400;
-      font-style: italic;
-      font-size: 52px;
-      color: var(--dark);
-      letter-spacing: -0.01em;
-      line-height: 1;
-      display: block;
-      margin-bottom: 12px;
-    }
-
-    .tagline {
-      font-size: 15px;
-      color: var(--brown);
-      font-weight: 400;
-    }
-
-    nav {
-      margin-top: 20px;
-      display: flex;
-      gap: 20px;
-    }
-
-    nav a {
-      font-size: 13px;
-      color: var(--tan);
-      text-decoration: none;
-      letter-spacing: 0.02em;
-    }
-
-    nav a:hover {
-      color: var(--brown);
-    }
-
-    section {
-      margin-bottom: 48px;
-    }
-
-    h2 {
-      font-family: "nimbus-roman", serif;
-      font-weight: 400;
-      font-style: italic;
-      font-size: 22px;
-      color: var(--brown);
-      margin-bottom: 14px;
-    }
-
-    p {
-      margin-bottom: 16px;
-      font-size: 15.5px;
-      color: var(--dark);
-    }
-
-    p:last-child {
-      margin-bottom: 0;
-    }
-
-    a {
-      color: var(--brown);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-
-    a:hover {
-      color: var(--dark);
-    }
-
-    code {
-      font-family: "SF Mono", "Menlo", "Consolas", monospace;
-      font-size: 13.5px;
-      background: rgba(139, 90, 60, 0.08);
-      color: var(--dark);
-      padding: 1px 5px;
-      border-radius: 3px;
-    }
-
-    pre {
-      background: var(--dark);
-      color: var(--cream);
-      padding: 20px 24px;
-      border-radius: 6px;
-      overflow-x: auto;
-      margin: 20px 0;
-      font-family: "SF Mono", "Menlo", "Consolas", monospace;
-      font-size: 13px;
-      line-height: 1.7;
-    }
-
-    pre code {
-      background: none;
-      color: inherit;
-      padding: 0;
-      font-size: inherit;
-    }
-
-    .comment {
-      color: var(--tan);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 14px;
-      margin: 20px 0;
-    }
-
-    th {
-      text-align: left;
-      font-weight: 700;
-      padding: 8px 12px 8px 0;
-      border-bottom: 1px solid rgba(139, 90, 60, 0.2);
-      color: var(--brown);
-      font-size: 12px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-    }
-
-    td {
-      padding: 9px 12px 9px 0;
-      border-bottom: 1px solid rgba(139, 90, 60, 0.1);
-      vertical-align: top;
-    }
-
-    td:last-child {
-      color: var(--brown);
-    }
-
-    tr:last-child td {
-      border-bottom: none;
-    }
-
-    footer {
-      margin-top: 80px;
-      padding-top: 24px;
-      border-top: 1px solid rgba(139, 90, 60, 0.15);
-      font-size: 13px;
-      color: var(--tan);
-      display: flex;
-      gap: 20px;
-    }
-
-    footer a {
-      color: var(--tan);
-    }
-
-    footer a:hover {
-      color: var(--brown);
-    }
-
-    @media (max-width: 540px) {
-      body {
-        padding: 48px 20px 80px;
-      }
-
-      .wordmark {
-        font-size: 40px;
-      }
-
-      pre {
-        padding: 16px;
-      }
-    }
-  </style>
+  <link rel="stylesheet" href="shared.css">
 </head>
 <body>
 
   <header>
-    <span class="wordmark">KILN</span>
+    <a class="wordmark" href="index.html">KILN</a>
     <p class="tagline">A Cargo-style CLI for SystemVerilog</p>
     <nav>
+      <a href="index.html" class="active">Overview</a>
       <a href="docs.html">Docs</a>
       <a href="https://github.com/tejasprabhune/kiln">GitHub</a>
       <a href="https://crates.io/crates/kiln-sv">crates.io</a>
@@ -299,7 +103,7 @@ kiln tree</code></pre>
     <p>
       A <code>Kiln.toml</code> at the project root describes the design: source globs,
       top module, simulation profile (debug or release), lint severity overrides,
-      and dependencies. There's no build system DSL to learn — just a TOML file.
+      and dependencies. There's no build system DSL to learn, just a TOML file.
     </p>
     <pre><code>[package]
 name    = "counter"
