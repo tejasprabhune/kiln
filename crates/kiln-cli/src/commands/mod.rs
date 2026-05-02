@@ -8,6 +8,7 @@ mod check;
 mod check_manifest;
 mod deps;
 mod new;
+mod test;
 
 /// The `kiln` CLI.
 #[derive(Debug, Parser)]
@@ -104,6 +105,21 @@ enum Command {
     /// Print the dependency tree.
     Tree,
 
+    /// Discover and run testbenches.
+    Test {
+        /// Substring filter on test names.
+        filter: Option<String>,
+        /// Number of parallel jobs. Defaults to available parallelism.
+        #[arg(short, long)]
+        jobs: Option<usize>,
+        /// Keep going after the first failure.
+        #[arg(long)]
+        no_fail_fast: bool,
+        /// Print discovered tests, do not run.
+        #[arg(long)]
+        list: bool,
+    },
+
     /// Parse `Kiln.toml` and print the resolved manifest. Used by tests.
     #[command(hide = true)]
     CheckManifest {
@@ -140,6 +156,12 @@ impl Cli {
             Command::Remove { name } => deps::run_remove(name),
             Command::Update => deps::run_update(),
             Command::Tree => deps::run_tree(),
+            Command::Test {
+                filter,
+                jobs,
+                no_fail_fast,
+                list,
+            } => test::run(filter, jobs, no_fail_fast, list),
             Command::CheckManifest { path } => check_manifest::run(path.as_deref()),
         }
     }

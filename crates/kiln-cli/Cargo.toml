@@ -17,6 +17,7 @@ kiln-core.workspace = true
 kiln-build.workspace = true
 kiln-deps.workspace = true
 kiln-lint.workspace = true
+kiln-test.workspace = true
 slang-rs.workspace = true
 clap.workspace = true
 anyhow.workspace = true
