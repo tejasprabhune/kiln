@@ -66,12 +66,14 @@ fn build_with_path_dep_prints_pass() {
     kiln()
         .arg("build")
         .current_dir(&project)
+        .env("NO_COLOR", "1")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Built `consumer_top`"));
+        .stderr(predicate::str::contains("Finished `consumer_top`"));
     kiln()
         .arg("run")
         .current_dir(&project)
+        .env("NO_COLOR", "1")
         .assert()
         .success()
         .stdout(predicate::str::contains("PASS"));
@@ -85,9 +87,10 @@ fn update_writes_kiln_lock() {
     kiln()
         .arg("update")
         .current_dir(&project)
+        .env("NO_COLOR", "1")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Updated `Kiln.lock`"));
+        .stderr(predicate::str::contains("Updated `Kiln.lock`"));
     let lock = std::fs::read_to_string(project.join("Kiln.lock")).unwrap();
     assert!(lock.contains("local_ip"));
 }
@@ -103,6 +106,7 @@ fn add_path_dep_modifies_manifest() {
     kiln()
         .args(["remove", "local_ip"])
         .current_dir(&project)
+        .env("NO_COLOR", "1")
         .assert()
         .success();
     let manifest_after_remove = std::fs::read_to_string(project.join("Kiln.toml")).unwrap();
@@ -112,9 +116,10 @@ fn add_path_dep_modifies_manifest() {
         .args(["add", "local_ip", "--path"])
         .arg(&local_ip_abs)
         .current_dir(&project)
+        .env("NO_COLOR", "1")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Added dependency `local_ip`"));
+        .stderr(predicate::str::contains("Adding"));
     let manifest_after_add = std::fs::read_to_string(project.join("Kiln.toml")).unwrap();
     assert!(manifest_after_add.contains("local_ip"));
     assert!(manifest_after_add.contains("path"));

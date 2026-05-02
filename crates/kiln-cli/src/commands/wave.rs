@@ -4,6 +4,8 @@ use anyhow::{anyhow, Context, Result};
 
 use kiln_core::find_manifest;
 
+use crate::reporter;
+
 pub fn run(test_name: Option<String>, print_path: bool) -> Result<()> {
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;
@@ -31,7 +33,7 @@ pub fn run(test_name: Option<String>, print_path: bool) -> Result<()> {
         return Ok(());
     }
 
+    reporter::status("Opening", fst.display());
     kiln_wave::open(&fst)?;
-    println!("Opened {} in surfer", fst.display());
     Ok(())
 }

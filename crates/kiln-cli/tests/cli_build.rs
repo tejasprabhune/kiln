@@ -49,15 +49,19 @@ fn copy_recursive(src: &Path, dst: &Path) {
 #[test]
 fn build_then_run_prints_pass_for_hello_counter() {
     let tmp = copy_example("hello-counter");
+    // Status messages now go to stderr (cargo-style); only `PASS` from the
+    // simulator binary itself goes to stdout.
     kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Built `tb`"));
+        .stderr(predicate::str::contains("Finished `tb`"));
     kiln()
         .arg("run")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success()
         .stdout(predicate::str::contains("PASS"));
@@ -69,21 +73,27 @@ fn second_build_is_a_cache_hit() {
     kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success();
     let out = kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success()
         .get_output()
-        .stdout
+        .stderr
         .clone();
-    let stdout = String::from_utf8_lossy(&out);
-    // No "Built ..." print on a cache hit.
+    let stderr = String::from_utf8_lossy(&out);
+    // Cache hit shows the dedicated `Cache hit` info line, never `Finished`.
     assert!(
-        !stdout.contains("Built `tb`"),
-        "expected cache hit; got stdout: {stdout}"
+        stderr.contains("Cache hit"),
+        "expected cache hit; got stderr:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("Finished"),
+        "Finished should not appear on a cache hit; got stderr:\n{stderr}"
     );
 }
 
@@ -93,6 +103,7 @@ fn editing_source_invalidates_cache() {
     kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success();
     // Edit the testbench (cosmetically) and rebuild.
@@ -103,15 +114,16 @@ fn editing_source_invalidates_cache() {
     let out = kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success()
         .get_output()
-        .stdout
+        .stderr
         .clone();
-    let stdout = String::from_utf8_lossy(&out);
+    let stderr = String::from_utf8_lossy(&out);
     assert!(
-        stdout.contains("Built `tb`"),
-        "expected cache miss after edit; stdout: {stdout}"
+        stderr.contains("Finished `tb`"),
+        "expected cache miss after edit; stderr:\n{stderr}"
     );
 }
 
@@ -156,15 +168,17 @@ fn clean_removes_target_kiln() {
     kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success();
     assert!(tmp.path().join("target/kiln").is_dir());
     kiln()
         .arg("clean")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Removed build cache"));
+        .stderr(predicate::str::contains("Removed build cache"));
     assert!(!tmp.path().join("target/kiln").exists());
 }
 
@@ -174,18 +188,20 @@ fn release_profile_distinct_from_debug() {
     kiln()
         .arg("build")
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success();
     let out = kiln()
         .args(["build", "--release"])
         .current_dir(tmp.path())
+        .env("NO_COLOR", "1")
         .assert()
         .success()
         .get_output()
         .clone();
-    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stdout.contains("profile=release"),
-        "expected release profile rebuild; got: {stdout}"
+        stderr.contains("release profile"),
+        "expected release profile rebuild; got stderr:\n{stderr}"
     );
 }

@@ -2,6 +2,7 @@
 
 use std::path::Path;
 use std::process::Command;
+use std::time::Instant;
 
 use anyhow::{anyhow, bail, Context, Result};
 
@@ -11,11 +12,13 @@ use kiln_core::{find_manifest, Manifest};
 use kiln_deps::ResolvedSources;
 
 use crate::render;
+use crate::reporter;
 
 pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
     if verbose {
         bump_log_level();
     }
+    let started = Instant::now();
     let project_root = current_project_root()?;
     let manifest_path = find_manifest(&project_root)?;
     let manifest = Manifest::load(&manifest_path)
@@ -29,7 +32,12 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
     let mut source_set = SourceSet::resolve(&project_root, &manifest)?;
     let mut dep_include_dirs: Vec<std::path::PathBuf> = Vec::new();
     if !manifest.dependencies.is_empty() {
+        reporter::status("Resolving", "dependencies via bender");
         let resolved: ResolvedSources = kiln_deps::resolve(&project_root, &manifest)?;
+        reporter::debug(
+            "Resolved",
+            format!("{} package(s) from `Kiln.lock`", resolved.packages.len()),
+        );
         for f in resolved.all_files() {
             if !source_set.files.contains(&f) {
                 source_set.files.push(f);
@@ -49,10 +57,20 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
         }
     }
 
+    reporter::status(
+        "Compiling",
+        format!(
+            "`{}` with verilator ({} profile)",
+            plan.top,
+            plan.profile.as_str()
+        ),
+    );
     let outcome = verilator::compile(&plan)?;
 
     let rendered = render::render(&outcome.diagnostics);
     if !rendered.is_empty() {
+        // Diagnostics go to stdout so callers can pipe them; reporter
+        // status lines stay on stderr.
         print!("{rendered}");
     }
 
@@ -69,15 +87,27 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
         None => bail!("verilator did not produce a binary; see diagnostics above"),
     };
 
-    if !outcome.cache_hit {
-        println!(
-            "Built `{}` (profile={}) at {}",
-            plan.top,
-            plan.profile.as_str(),
-            binary.display()
+    let elapsed = started.elapsed();
+    if outcome.cache_hit {
+        reporter::info(
+            "Cache hit",
+            format!(
+                "`{}` ({} profile) at {}",
+                plan.top,
+                plan.profile.as_str(),
+                reporter::dim(&binary.display().to_string())
+            ),
         );
     } else {
-        tracing::debug!(target: "kiln-cli", "build cache hit for {}", plan.top);
+        reporter::status(
+            "Finished",
+            format!(
+                "`{}` ({} profile) in {}",
+                plan.top,
+                plan.profile.as_str(),
+                fmt_elapsed(elapsed)
+            ),
+        );
     }
 
     Ok(BuildArtifacts {
@@ -89,6 +119,18 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
 
 pub fn run_run(release: bool, verbose: bool, forwarded: Vec<String>) -> Result<()> {
     let artifacts = run_build(release, verbose)?;
+    reporter::status(
+        "Running",
+        format!(
+            "{}{}",
+            artifacts.binary.display(),
+            if forwarded.is_empty() {
+                String::new()
+            } else {
+                format!(" {}", forwarded.join(" "))
+            }
+        ),
+    );
     let status = Command::new(&artifacts.binary)
         .args(&forwarded)
         .status()
@@ -115,7 +157,7 @@ pub fn run_clean() -> Result<()> {
             project_root.display()
         )
     })?;
-    println!("Removed build cache");
+    reporter::status("Removed", "build cache");
     Ok(())
 }
 
@@ -130,6 +172,14 @@ fn bump_log_level() {
     // top-level CLI and have not spawned threads at this point.
     unsafe {
         std::env::set_var("KILN_LOG", "debug");
+    }
+}
+
+pub fn fmt_elapsed(d: std::time::Duration) -> String {
+    if d.as_secs() == 0 {
+        format!("{}ms", d.as_millis())
+    } else {
+        format!("{:.2}s", d.as_secs_f32())
     }
 }
 

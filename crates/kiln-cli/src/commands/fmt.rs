@@ -7,6 +7,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use kiln_build::SourceSet;
 use kiln_core::{find_manifest, Manifest};
 
+use crate::reporter;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OutputFormat {
     Plain,
@@ -31,6 +33,12 @@ pub fn run(check: bool, format: OutputFormat) -> Result<()> {
 }
 
 fn run_format(source_set: &SourceSet, format: OutputFormat) -> Result<()> {
+    if matches!(format, OutputFormat::Plain) {
+        reporter::status(
+            "Formatting",
+            format!("{} source file(s)", source_set.files().len()),
+        );
+    }
     let mut changed: Vec<PathBuf> = Vec::new();
     let mut unchanged: Vec<PathBuf> = Vec::new();
     for f in source_set.files() {
@@ -43,13 +51,14 @@ fn run_format(source_set: &SourceSet, format: OutputFormat) -> Result<()> {
     match format {
         OutputFormat::Plain => {
             for c in &changed {
-                println!("formatted {}", c.display());
+                reporter::debug("Formatted", c.display());
             }
-            println!(
-                "\n{} formatted, {} already canonical",
+            let summary = format!(
+                "{} formatted, {} already canonical",
                 changed.len(),
                 unchanged.len()
             );
+            reporter::status("Result", reporter::green(&summary));
         }
         OutputFormat::Json => {
             let payload = serde_json::json!({
@@ -63,6 +72,12 @@ fn run_format(source_set: &SourceSet, format: OutputFormat) -> Result<()> {
 }
 
 fn run_check(source_set: &SourceSet, format: OutputFormat) -> Result<()> {
+    if matches!(format, OutputFormat::Plain) {
+        reporter::status(
+            "Checking",
+            format!("formatting of {} source file(s)", source_set.files().len()),
+        );
+    }
     let mut outcomes = Vec::new();
     let mut bad = 0usize;
     for f in source_set.files() {
@@ -79,11 +94,16 @@ fn run_check(source_set: &SourceSet, format: OutputFormat) -> Result<()> {
                     print!("{}", o.diff);
                 }
             }
-            println!(
-                "\n{} files formatted, {} need formatting",
+            let summary = format!(
+                "{} canonical, {} need formatting",
                 outcomes.len() - bad,
                 bad
             );
+            if bad > 0 {
+                reporter::status("Result", reporter::red(&summary));
+            } else {
+                reporter::status("Result", reporter::green(&summary));
+            }
         }
         OutputFormat::Json => {
             let payload = serde_json::json!({

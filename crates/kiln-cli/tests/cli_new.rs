@@ -48,7 +48,7 @@ fn new_creates_project_layout() {
         .arg(tmp.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Created kiln project"));
+        .stderr(predicate::str::contains("Created kiln project"));
 
     let project = tmp.path().join("demo");
     insta::assert_snapshot!("new_demo_layout", snapshot_layout(&project));

@@ -1,12 +1,14 @@
 //! `kiln test`.
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 
 use kiln_build::SourceSet;
 use kiln_core::{find_manifest, Manifest};
 use kiln_test::{discover, run_many_with_options};
+
+use crate::reporter;
 
 pub fn run(
     filter: Option<String>,
@@ -29,6 +31,8 @@ pub fn run(
     }
 
     if list {
+        // `--list` is data-mode: stdout, no decoration, so callers can
+        // pipe into xargs / jq / shell scripts.
         for t in &tests {
             println!("{}", t.name);
         }
@@ -36,13 +40,17 @@ pub fn run(
     }
 
     if tests.is_empty() {
-        println!("No tests matched. Add testbenches under tests/<name>.sv.");
+        reporter::info(
+            "Skipping",
+            "no tests matched (add testbenches under tests/<name>.sv)",
+        );
         return Ok(());
     }
 
     let mut source_set =
         SourceSet::resolve(&project_root, &manifest).context("resolving project source set")?;
     if !manifest.dependencies.is_empty() {
+        reporter::status("Resolving", "dependencies via bender");
         let resolved = kiln_deps::resolve(&project_root, &manifest)?;
         for f in resolved.all_files() {
             if !source_set.files.contains(&f) {
@@ -57,6 +65,22 @@ pub fn run(
             .unwrap_or(1)
     });
     let trace_effective = trace || manifest.wave.enabled_by_default;
+
+    let started = Instant::now();
+    reporter::status(
+        "Running",
+        format!(
+            "{} test{} ({} parallel{})",
+            tests.len(),
+            if tests.len() == 1 { "" } else { "s" },
+            jobs,
+            if trace_effective {
+                ", with --trace"
+            } else {
+                ""
+            }
+        ),
+    );
     let outcomes = run_many_with_options(
         &project_root,
         &manifest,
@@ -68,11 +92,16 @@ pub fn run(
 
     let mut passed = 0usize;
     let mut failed = 0usize;
+    let mut stopped_early = false;
     for o in &outcomes {
         match o {
             Ok(t) => {
-                let label = if t.passed { "PASS" } else { "FAIL" };
-                let elapsed = format_duration(t.elapsed);
+                let label = if t.passed {
+                    reporter::green("PASS")
+                } else {
+                    reporter::red("FAIL")
+                };
+                let elapsed = reporter::dim(&format_duration(t.elapsed));
                 println!("test {} ... {label} ({elapsed})", t.name);
                 if !t.passed {
                     failed += 1;
@@ -83,6 +112,7 @@ pub fn run(
                         println!("  stderr: {}", t.stderr.lines().last().unwrap_or(""));
                     }
                     if !no_fail_fast {
+                        stopped_early = true;
                         break;
                     }
                 } else {
@@ -90,24 +120,35 @@ pub fn run(
                 }
             }
             Err(e) => {
-                println!("test ?: ERROR ({e})");
+                println!("test ?: {} ({e})", reporter::red("ERROR"));
                 failed += 1;
                 if !no_fail_fast {
+                    stopped_early = true;
                     break;
                 }
             }
         }
     }
 
-    println!(
-        "\ntest result: {} passed, {} failed, {} total",
+    let elapsed = started.elapsed();
+    let total = outcomes.len();
+    let summary = format!(
+        "{} passed, {} failed, {} total in {}{}",
         passed,
         failed,
-        outcomes.len()
+        total,
+        format_duration(elapsed),
+        if stopped_early {
+            " (stopped on first failure)"
+        } else {
+            ""
+        }
     );
     if failed > 0 {
+        reporter::status("Result", reporter::red(&summary));
         anyhow::bail!("{failed} test(s) failed");
     }
+    reporter::status("Result", reporter::green(&summary));
     Ok(())
 }
 

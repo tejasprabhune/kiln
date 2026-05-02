@@ -1,12 +1,16 @@
 //! `kiln check`: fast slang-driven elaboration check, no Verilator.
 
+use std::time::Instant;
+
 use anyhow::{anyhow, bail, Context, Result};
 
 use kiln_build::SourceSet;
 use kiln_core::{find_manifest, Manifest};
 use slang_rs::Slang;
 
+use crate::commands::build::fmt_elapsed;
 use crate::render;
+use crate::reporter;
 
 pub fn run(deny_warnings: bool, verbose: bool) -> Result<()> {
     if verbose {
@@ -23,7 +27,10 @@ pub fn run(deny_warnings: bool, verbose: bool) -> Result<()> {
         .to_path_buf();
     let source_set = SourceSet::resolve(&project_root, &manifest)?;
 
+    reporter::status("Checking", format!("`{}` with slang", manifest.design.top));
+    let started = Instant::now();
     let slang = Slang::new()?;
+    reporter::debug("Using", format!("slang {}", slang.version()));
     let diagnostics = kiln_lint::check(&slang, &manifest, &source_set)?;
 
     let rendered = render::render(&diagnostics);
@@ -31,18 +38,39 @@ pub fn run(deny_warnings: bool, verbose: bool) -> Result<()> {
         print!("{rendered}");
     }
 
-    let has_errors = diagnostics
+    let n_errors = diagnostics
         .iter()
-        .any(|d| matches!(d.severity, kiln_build::Severity::Error));
-    let has_warnings = diagnostics
+        .filter(|d| matches!(d.severity, kiln_build::Severity::Error))
+        .count();
+    let n_warnings = diagnostics
         .iter()
-        .any(|d| matches!(d.severity, kiln_build::Severity::Warning));
+        .filter(|d| matches!(d.severity, kiln_build::Severity::Warning))
+        .count();
+    let elapsed = fmt_elapsed(started.elapsed());
 
-    if has_errors {
+    if n_errors > 0 {
+        reporter::status(
+            "Result",
+            reporter::red(&format!("{n_errors} error(s) in {elapsed}")),
+        );
         bail!("check failed");
     }
-    if deny_warnings && has_warnings {
-        std::process::exit(1);
+    if n_warnings > 0 {
+        if deny_warnings {
+            reporter::status(
+                "Result",
+                reporter::red(&format!(
+                    "{n_warnings} warning(s) in {elapsed} (--deny-warnings)"
+                )),
+            );
+            std::process::exit(1);
+        }
+        reporter::status(
+            "Result",
+            reporter::yellow(&format!("{n_warnings} warning(s) in {elapsed}")),
+        );
+        return Ok(());
     }
+    reporter::status("Result", reporter::green(&format!("clean in {elapsed}")));
     Ok(())
 }
