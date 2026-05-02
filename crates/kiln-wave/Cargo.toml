@@ -1,6 +1,6 @@
 [package]
 name = "kiln-wave"
-description = "Surfer waveform integration for kiln. Stub at M0; populated from M7."
+description = "Surfer waveform integration for kiln."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,9 @@ authors.workspace = true
 kiln-core.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+e2e = []

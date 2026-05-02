@@ -25,6 +25,7 @@ impl BuildCacheKey {
         hasher.update(SCHEMA_VERSION.as_bytes());
         hasher.update(plan.top.as_bytes());
         hasher.update(plan.profile.as_str().as_bytes());
+        hasher.update(if plan.trace { b"trace=1" } else { b"trace=0" });
 
         let mut sorted_defines: Vec<_> = plan.defines.iter().collect();
         sorted_defines.sort();
@@ -85,6 +86,7 @@ mod tests {
             include_dirs: vec![],
             defines: BTreeMap::new(),
             profile,
+            trace: false,
         }
     }
 

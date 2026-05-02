@@ -100,6 +100,17 @@ pub fn run_one(
     base_source_set: &SourceSet,
     test: &DiscoveredTest,
 ) -> Result<TestOutcome, TestError> {
+    run_one_with_options(project_root, manifest, base_source_set, test, false)
+}
+
+/// Build and run one test with explicit options.
+pub fn run_one_with_options(
+    project_root: &Path,
+    manifest: &Manifest,
+    base_source_set: &SourceSet,
+    test: &DiscoveredTest,
+    trace: bool,
+) -> Result<TestOutcome, TestError> {
     let start = Instant::now();
 
     // Construct a SourceSet that includes both the project's RTL and this
@@ -118,7 +129,7 @@ pub fn run_one(
     let mut manifest_for_test = manifest.clone();
     manifest_for_test.design.top = test.top.clone();
 
-    let plan = BuildPlan::new(&manifest_for_test, &source_set, Profile::Debug);
+    let plan = BuildPlan::new(&manifest_for_test, &source_set, Profile::Debug).with_trace(trace);
     let outcome = verilator::compile(&plan)?;
     let binary = match outcome.binary {
         Some(b) => b,
@@ -133,13 +144,23 @@ pub fn run_one(
         }
     };
 
-    let _ = project_root;
-    let output = Command::new(&binary)
-        .output()
-        .map_err(|source| TestError::Io {
-            path: binary.clone(),
+    // When tracing, run the binary in `<project>/target/kiln/waves/`
+    // so its `$dumpfile("<top>.fst")` lands in the right place.
+    let mut cmd = Command::new(&binary);
+    if trace {
+        let dir = project_root.join("target").join("kiln").join("waves");
+        std::fs::create_dir_all(&dir).map_err(|source| TestError::Io {
+            path: dir.clone(),
             source,
         })?;
+        cmd.current_dir(&dir);
+    } else {
+        let _ = project_root;
+    }
+    let output = cmd.output().map_err(|source| TestError::Io {
+        path: binary.clone(),
+        source,
+    })?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     let passed = output.status.success() && stdout.contains("PASS");
@@ -154,14 +175,25 @@ pub fn run_one(
 }
 
 /// Run a slice of tests in parallel, up to `jobs` concurrent workers.
-/// Order of returned outcomes matches `tests` (so callers can render
-/// stable output even when the parallel pool finishes out of order).
 pub fn run_many(
     project_root: &Path,
     manifest: &Manifest,
     source_set: &SourceSet,
     tests: &[DiscoveredTest],
     jobs: usize,
+) -> Vec<Result<TestOutcome, TestError>> {
+    run_many_with_options(project_root, manifest, source_set, tests, jobs, false)
+}
+
+/// Run a slice of tests in parallel, with `trace` propagated to each
+/// per-test build/run. Order of returned outcomes matches `tests`.
+pub fn run_many_with_options(
+    project_root: &Path,
+    manifest: &Manifest,
+    source_set: &SourceSet,
+    tests: &[DiscoveredTest],
+    jobs: usize,
+    trace: bool,
 ) -> Vec<Result<TestOutcome, TestError>> {
     use std::sync::{Arc, Mutex};
 
@@ -184,7 +216,8 @@ pub fn run_many(
                     *g += 1;
                     i
                 };
-                let r = run_one(project_root, manifest, source_set, &tests[idx]);
+                let r =
+                    run_one_with_options(project_root, manifest, source_set, &tests[idx], trace);
                 let mut g = results.lock().unwrap();
                 g[idx] = Some(r);
             });

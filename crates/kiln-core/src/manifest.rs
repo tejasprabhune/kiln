@@ -52,6 +52,37 @@ pub struct Manifest {
     pub dependencies: BTreeMap<String, toml::Value>,
     #[serde(default)]
     pub lint: LintConfig,
+    #[serde(default)]
+    pub wave: WaveConfig,
+}
+
+/// `[wave]` table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct WaveConfig {
+    /// Trace format. `fst` (default) or `vcd`.
+    #[serde(default)]
+    pub format: WaveFormat,
+    /// If true, every `kiln test` enables `--trace` automatically.
+    #[serde(default)]
+    pub enabled_by_default: bool,
+}
+
+impl Default for WaveConfig {
+    fn default() -> Self {
+        Self {
+            format: WaveFormat::Fst,
+            enabled_by_default: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum WaveFormat {
+    #[default]
+    Fst,
+    Vcd,
 }
 
 /// `[lint]` table. Severity overrides per slang diagnostic ID.
