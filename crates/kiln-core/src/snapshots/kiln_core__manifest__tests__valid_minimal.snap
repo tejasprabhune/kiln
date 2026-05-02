@@ -1,5 +1,6 @@
 ---
 source: crates/kiln-core/src/manifest.rs
+assertion_line: 251
 expression: m
 ---
 package:

@@ -373,23 +373,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
-name = "kiln-sv-build"
-version = "0.1.0"
-dependencies = [
- "blake3",
- "glob",
- "insta",
- "kiln-sv-core",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "kiln-sv-cli"
+name = "kiln-sv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -413,6 +397,22 @@ dependencies = [
  "tracing-subscriber",
  "walkdir",
  "which",
+]
+
+[[package]]
+name = "kiln-sv-build"
+version = "0.1.0"
+dependencies = [
+ "blake3",
+ "glob",
+ "insta",
+ "kiln-sv-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]

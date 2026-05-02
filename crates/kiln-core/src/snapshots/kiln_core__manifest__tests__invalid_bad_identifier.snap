@@ -1,5 +1,6 @@
 ---
 source: crates/kiln-core/src/manifest.rs
+assertion_line: 323
 expression: err.to_string()
 ---
 package name `1bad` is not a valid SystemVerilog identifier (must start with a letter or `_` and contain only letters, digits, or `_`)

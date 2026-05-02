@@ -8,6 +8,9 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[lib]
+name = "kiln_fmt"
+
 [dependencies]
 kiln-core.workspace = true
 thiserror.workspace = true
