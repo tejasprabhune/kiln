@@ -135,7 +135,7 @@ jobs:
           bender --version
           verible-verilog-format --version
       - name: Run kiln-cli e2e tests
-        run: cargo test -p kiln-sv-cli --features e2e
+        run: cargo test -p kiln-sv --features e2e
 
   test-e2e-slang:
     name: e2e (slang on ${{ matrix.os }})
