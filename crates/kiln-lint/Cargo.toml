@@ -1,6 +1,6 @@
 [package]
 name = "kiln-lint"
-description = "Linting for kiln (drives slang-rs). Stub at M0; populated from M3."
+description = "Linting for kiln. Drives slang-rs."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,13 @@ authors.workspace = true
 
 [dependencies]
 kiln-core.workspace = true
+kiln-build.workspace = true
 slang-rs.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+e2e = []

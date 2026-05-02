@@ -19,3 +19,4 @@ design:
     BAR: ""
     FOO: "1"
 dependencies: {}
+lint: {}

@@ -242,13 +242,110 @@ behaviour required a design call beyond the milestones doc.
 
 ### Next session pickup
 
-- Begin M3 (`kiln check` driven by `slang-rs`). M3 reuses M2's
-  `BuildDiagnostic` rendering and adds:
-  1. The ariadne-based renderer that M2 deferred.
-  2. `kiln-lint::Linter` driving `slang-rs::Slang::compile` with
-     `parse_only(true)` for sub-second feedback.
-  3. The `[lint]` table in `Kiln.toml` mapping slang diagnostic IDs
-     onto `error | warn | allow`.
-  4. `examples/lint-demo/` with intentional smells.
-- The unit-test snapshot for `[lint]` round-tripping should land in
-  `kiln-core::manifest`.
+Continued in this session — see M3 below.
+
+## 2026-05-02 — M3 (Slang fast check)
+
+**Branch:** `milestone/m3-slang-check` (stacked on `milestone/m2-verilator`)
+**PR:** opened against `milestone/m2-verilator`
+
+### Summary
+
+`kiln check` runs a slang elaboration over the manifest's source set,
+applies `[lint]` severity overrides, and renders results through the
+same plain-text renderer M2 introduced. `kiln-lint` is the seam
+between slang's `--diag-json` shape and `kiln-build`'s
+`BuildDiagnostic`. New `[lint]` table in `Kiln.toml` maps slang's
+`optionName` IDs onto `error | warn | allow`. New `examples/lint-demo/`
+exercises the override path: it triggers `width-trunc`, which the
+manifest promotes to `error`, so `kiln check` fails on it loudly.
+
+### Acceptance criteria
+
+| Criterion (per `kiln-milestones.md` §M3) | Status | Evidence |
+| ---------------------------------------- | ------ | -------- |
+| `kiln check` on hello-counter completes in < 200ms (fail-soft) | pass | `check_completes_quickly_on_hello_counter` measures elapsed time and emits a soft warning if > 200ms; locally elapsed is well under 200ms |
+| Severity overrides round-trip in `Kiln.toml` | pass | `kiln_lint::tests::lint_config_round_trips_in_manifest` |
+| Same diagnostic rendering between `kiln build` and `kiln check` | pass | Both flow through `crates/kiln-cli/src/render.rs::render`. Caret rendering exercised by `cli_check::check_renders_with_caret` |
+
+### Tests in this PR
+
+- 6 unit tests in `kiln-lint`: severity-override matrix and `[lint]`
+  round-trip in manifest.
+- 6 `--features e2e` tests in `crates/kiln-cli/tests/cli_check.rs`:
+  clean check on hello-counter, failing check on lint-demo with
+  promoted width-trunc, allow-suppression after editing the manifest,
+  caret rendering, manifest validation propagation, performance
+  fail-soft.
+
+### Deviations from `kiln-milestones.md`
+
+- **Ariadne renderer still not wired.** M2 deferred it and M3 inherits
+  the same plain-text path. The "visually identical between `kiln
+  build` and `kiln check`" criterion is true today because both call
+  the same `render::render`. Adopting ariadne later updates both at
+  once.
+- **`--parse-only` is *not* used for `kiln check`.** Slang skips
+  writing the `--diag-json` file when `--parse-only` is on, and we
+  want full elaboration so semantic warnings (width-trunc) fire. The
+  "fast feedback" property comes from skipping Verilator entirely.
+- **AST visitor primitives** listed in M3 are deferred. M1's `AstNode`
+  already has `kind`, `name`, `members`, and an `extra: ExtraFields`
+  escape hatch — enough for M3, since the M3 acceptance criteria don't
+  require custom lint rules on top of slang's own diagnostics. The
+  typed Visitor lands when custom rules do.
+
+### Notes carried forward
+
+- `[lint]` uses `#[serde(flatten)]` for the rule map, which conflicts
+  with `deny_unknown_fields`. Intentional — every entry in `[lint]` is
+  a rule ID by definition.
+- `kiln-core::manifest` snapshots regenerated for the new `lint` field.
+
+## Definition of done — what shipped tonight
+
+- **M0 — Foundation** (PR #1): workspace, manifest parser, `kiln new` /
+  `init` / `check-manifest` / `--version`, dual-license, CI.
+- **M1 — Slang wrapper** (PR #2): `slang-rs` subprocess wrapper with
+  typed diagnostics + AST + version validation; ADRs 0001 and 0002.
+- **M2 — Build pipeline** (PR #3): `kiln build` / `run` / `clean`
+  driving Verilator with content-hashed cache; `examples/hello-counter`
+  prints PASS.
+- **M3 — Slang fast check** (PR #4): `kiln check`, `[lint]` severity
+  overrides, `examples/lint-demo`.
+- **CI fix** in m1 and m2 (force-pushed): regular `test` job no longer
+  runs e2e tests without their tools installed.
+
+## Stop reason
+
+Hard-stop at the end of M3. Reasons:
+
+1. **Shop-counter time.** M4 onward each carry comparable scope to M1
+   or M2 individually, and adding more in this session risks regressions
+   I can't carefully review against the existing infra.
+2. **Open M4 ADR territory.** Bender's library API needs hands-on
+   investigation against the latest crates.io release; the milestones
+   doc anticipates an ADR (`0003-bender-integration.md`). Better to
+   start that with a fresh budget rather than tail-end this session.
+3. **Outside-tool inventory.** M5 needs cocotb (Python), M6 needs
+   verible-verilog-format, M8 wants slang AST traversal at scale. Each
+   has a tool-discovery + CI step that deserves its own session.
+
+The state at hand-off is clean: every shipped milestone has a green
+acceptance-criteria column, all four PRs are open with detailed
+descriptions, and `docs/status.md` is the single source of truth on
+where to pick up next.
+
+### Next session pickup
+
+- Pick up at **M4** (Bender wrapper):
+  1. ADR `docs/decisions/0003-bender-integration.md`.
+  2. Workspace dep on the published `bender` crate, pinned to a minor.
+  3. `kiln-deps` translates `Kiln.toml [dependencies]` into the
+     bender-resolver in-memory model and writes `Kiln.lock`.
+  4. `kiln add` / `remove` / `update` / `tree`.
+  5. `examples/with-deps/` consuming a small PULP IP (e.g.
+     `common_cells`).
+- Before starting M4, **the M0–M3 PR stack should be merged in order**
+  so each milestone branches off the previous and CI runs cleanly. The
+  current stacked-PR setup auto-retargets bases on merge.

@@ -1,0 +1,17 @@
+[package]
+name = "lint_demo"
+version = "0.1.0"
+authors = []
+description = "Tiny project that triggers a slang width-trunc warning by default."
+license = "MIT OR Apache-2.0"
+
+[design]
+top = "demo"
+sources = ["src/**/*.sv"]
+
+[lint]
+# Promote slang's width-trunc warning to an error so `kiln check` fails
+# loudly on it. Demote / suppress with `"warn"` or `"allow"`.
+width-trunc = "error"
+
+[dependencies]

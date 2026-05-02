@@ -383,7 +383,9 @@ dependencies = [
  "insta",
  "kiln-build",
  "kiln-core",
+ "kiln-lint",
  "predicates",
+ "slang-rs",
  "tempfile",
  "toml",
  "tracing",
@@ -439,8 +441,10 @@ dependencies = [
 name = "kiln-lint"
 version = "0.1.0"
 dependencies = [
+ "kiln-build",
  "kiln-core",
  "slang-rs",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

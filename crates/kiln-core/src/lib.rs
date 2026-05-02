@@ -25,5 +25,7 @@
 pub mod manifest;
 pub mod project;
 
-pub use manifest::{Design, Manifest, ManifestError, Package, ValidateOptions};
+pub use manifest::{
+    Design, LintConfig, LintSeverity, Manifest, ManifestError, Package, ValidateOptions,
+};
 pub use project::{find_manifest, ProjectError, MANIFEST_FILENAME};
