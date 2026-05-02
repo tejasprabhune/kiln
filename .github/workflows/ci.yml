@@ -65,14 +65,34 @@ jobs:
         with:
           toolchain: "1.85"
       - uses: Swatinem/rust-cache@v2
-      - name: Install verilator (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y verilator
       - name: Install verilator (macOS)
         if: runner.os == 'macOS'
         run: brew install verilator
+      - name: Cache verilator build (Linux)
+        if: runner.os == 'Linux'
+        id: cache-verilator
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/verilator
+          key: verilator-v5.026-ubuntu-22.04
+      - name: Build verilator from source (Linux)
+        # Ubuntu 22.04's apt verilator is 4.038, which doesn't support
+        # the --binary flag introduced in Verilator 5.0. Build v5.026
+        # from source instead, cached.
+        if: runner.os == 'Linux' && steps.cache-verilator.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git make autoconf g++ flex bison libfl2 libfl-dev help2man
+          git clone --depth 1 --branch v5.026 https://github.com/verilator/verilator.git /tmp/verilator-src
+          cd /tmp/verilator-src
+          autoconf
+          ./configure --prefix="$HOME/.local/verilator"
+          make -j"$(nproc)"
+          make install
+      - name: Add verilator to PATH (Linux)
+        if: runner.os == 'Linux'
+        run: echo "$HOME/.local/verilator/bin" >> "$GITHUB_PATH"
       - name: Verify verilator
         run: verilator --version
       - name: Run kiln-cli e2e tests
