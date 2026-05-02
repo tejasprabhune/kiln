@@ -1,0 +1,9 @@
+[
+  {
+    "severity": "warning",
+    "message": "implicit conversion truncates from 8 to 4 bits",
+    "optionName": "width-trunc",
+    "location": "width_mismatch.sv:5:13",
+    "symbolPath": "width_demo"
+  }
+]

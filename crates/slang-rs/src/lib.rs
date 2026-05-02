@@ -1,19 +1,54 @@
+// `SlangError` is intentionally large (carries paths, version info, captured
+// stderr). Boxing every fallible function's return for that 128-byte penalty
+// is worse than the lint suggests; surfacing rich errors is the whole point
+// of this layer.
+#![allow(clippy::result_large_err)]
 //! Pure-Rust subprocess wrapper around the `slang` SystemVerilog compiler CLI.
 //!
-//! At M0 this crate is a stub: it declares the public surface that M1 will
-//! fill in, but contains no real logic yet. See `kiln-milestones.md` M1 and
-//! `docs/decisions/0001-slang-integration-strategy.md` (added in M1) for the
-//! design.
+//! `slang-rs` shells out to a `slang` binary that the user installs
+//! separately. It is **not** an FFI binding to libslang — see
+//! `docs/decisions/0001-slang-integration-strategy.md` in the kiln repo.
+//!
+//! # Quick start
+//!
+//! ```no_run
+//! use std::path::PathBuf;
+//! use slang_rs::{Slang, CompileRequest};
+//!
+//! let slang = Slang::new()?;
+//! let req = CompileRequest::builder()
+//!     .source(PathBuf::from("src/top.sv"))
+//!     .top("top")
+//!     .build();
+//! let result = slang.compile(&req)?;
+//! for diag in &result.diagnostics {
+//!     println!("{:?}: {}", diag.severity, diag.message);
+//! }
+//! # Ok::<(), slang_rs::SlangError>(())
+//! ```
+//!
+//! # Architecture
+//!
+//! - [`Slang`] is the entry point. Construct it once per CLI run.
+//! - [`CompileRequest`] is a builder for an invocation; pass it to
+//!   [`Slang::compile`].
+//! - [`CompileResult`] carries the parsed AST (when one was requested) and
+//!   the list of [`Diagnostic`]s.
+//! - All process invocation funnels through `run_slang()` (private). That
+//!   helper centralises timeout handling, stderr capture, and error
+//!   conversion.
 
-/// Stub returned in place of a real `Slang` handle.
-pub fn placeholder() -> &'static str {
-    "slang-rs: not yet implemented"
-}
+mod ast;
+mod compile;
+mod diagnostic;
+mod error;
+mod handle;
+mod runner;
+mod version;
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn placeholder_is_stable() {
-        assert_eq!(super::placeholder(), "slang-rs: not yet implemented");
-    }
-}
+pub use ast::{Ast, AstNode, ExtraFields};
+pub use compile::{CompileRequest, CompileRequestBuilder, CompileResult, SvStandard};
+pub use diagnostic::{Diagnostic, Severity};
+pub use error::SlangError;
+pub use handle::{Slang, MIN_VERSION};
+pub use version::SlangVersion;

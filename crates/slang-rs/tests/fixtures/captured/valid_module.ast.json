@@ -1,0 +1,200 @@
+{
+  "design": {
+    "name": "$root",
+    "kind": "Root",
+    "addr": 4385890016,
+    "members": [
+      {
+        "name": "",
+        "kind": "CompilationUnit",
+        "addr": 6338699011640
+      },
+      {
+        "name": "counter",
+        "kind": "Instance",
+        "addr": 6338699012304,
+        "body": {
+          "name": "counter",
+          "kind": "InstanceBody",
+          "addr": 6338699011936,
+          "members": [
+            {
+              "name": "clk",
+              "kind": "Port",
+              "addr": 6338699012448,
+              "type": "logic",
+              "direction": "In",
+              "internalSymbol": "6338699012576 clk"
+            },
+            {
+              "name": "clk",
+              "kind": "Variable",
+              "addr": 6338699012576,
+              "type": "logic",
+              "lifetime": "Static"
+            },
+            {
+              "name": "rst_n",
+              "kind": "Port",
+              "addr": 6338699012720,
+              "type": "logic",
+              "direction": "In",
+              "internalSymbol": "6338699012848 rst_n"
+            },
+            {
+              "name": "rst_n",
+              "kind": "Variable",
+              "addr": 6338699012848,
+              "type": "logic",
+              "lifetime": "Static"
+            },
+            {
+              "name": "count",
+              "kind": "Port",
+              "addr": 6338699012992,
+              "type": "logic[3:0]",
+              "direction": "Out",
+              "internalSymbol": "6338699013120 count"
+            },
+            {
+              "name": "count",
+              "kind": "Variable",
+              "addr": 6338699013120,
+              "type": "logic[3:0]",
+              "lifetime": "Static"
+            },
+            {
+              "name": "",
+              "kind": "ProceduralBlock",
+              "addr": 6338699012192,
+              "procedureKind": "AlwaysFF",
+              "body": {
+                "kind": "Timed",
+                "timing": {
+                  "kind": "EventList",
+                  "events": [
+                    {
+                      "kind": "SignalEvent",
+                      "expr": {
+                        "kind": "NamedValue",
+                        "type": "logic",
+                        "symbol": "6338699012576 clk"
+                      },
+                      "edge": "PosEdge"
+                    },
+                    {
+                      "kind": "SignalEvent",
+                      "expr": {
+                        "kind": "NamedValue",
+                        "type": "logic",
+                        "symbol": "6338699012848 rst_n"
+                      },
+                      "edge": "NegEdge"
+                    }
+                  ]
+                },
+                "stmt": {
+                  "kind": "Block",
+                  "blockKind": "Sequential",
+                  "body": {
+                    "kind": "Conditional",
+                    "conditions": [
+                      {
+                        "expr": {
+                          "kind": "UnaryOp",
+                          "type": "logic",
+                          "op": "LogicalNot",
+                          "operand": {
+                            "kind": "NamedValue",
+                            "type": "logic",
+                            "symbol": "6338699012848 rst_n"
+                          }
+                        }
+                      }
+                    ],
+                    "check": "None",
+                    "ifTrue": {
+                      "kind": "ExpressionStatement",
+                      "expr": {
+                        "kind": "Assignment",
+                        "type": "logic[3:0]",
+                        "left": {
+                          "kind": "NamedValue",
+                          "type": "logic[3:0]",
+                          "symbol": "6338699013120 count"
+                        },
+                        "right": {
+                          "kind": "UnbasedUnsizedIntegerLiteral",
+                          "type": "logic[3:0]",
+                          "value": "4'b0"
+                        },
+                        "isNonBlocking": true
+                      }
+                    },
+                    "ifFalse": {
+                      "kind": "ExpressionStatement",
+                      "expr": {
+                        "kind": "Assignment",
+                        "type": "logic[3:0]",
+                        "left": {
+                          "kind": "NamedValue",
+                          "type": "logic[3:0]",
+                          "symbol": "6338699013120 count"
+                        },
+                        "right": {
+                          "kind": "Conversion",
+                          "type": "logic[3:0]",
+                          "operand": {
+                            "kind": "BinaryOp",
+                            "type": "logic[31:0]",
+                            "op": "Add",
+                            "left": {
+                              "kind": "Conversion",
+                              "type": "logic[31:0]",
+                              "operand": {
+                                "kind": "NamedValue",
+                                "type": "logic[3:0]",
+                                "symbol": "6338699013120 count"
+                              }
+                            },
+                            "right": {
+                              "kind": "Conversion",
+                              "type": "logic[31:0]",
+                              "operand": {
+                                "kind": "IntegerLiteral",
+                                "type": "int",
+                                "value": "1",
+                                "constant": "1"
+                              },
+                              "constant": "32'd1"
+                            }
+                          }
+                        },
+                        "isNonBlocking": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "definition": "4467744128 counter"
+        },
+        "connections": [
+        ]
+      }
+    ]
+  },
+  "definitions": [
+    {
+      "name": "counter",
+      "kind": "Definition",
+      "addr": 4467744128,
+      "defaultNetType": "4385887936 wire",
+      "definitionKind": "Module",
+      "defaultLifetime": "Static",
+      "unconnectedDrive": "None",
+      "cellDefine": false
+    }
+  ]
+}
