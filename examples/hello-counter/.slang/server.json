@@ -1,0 +1,11 @@
+{
+  "_generator": "kiln lsp",
+  "flags": "--top tb",
+  "index": [
+    {
+      "dirs": [
+        "/Users/prabhune/Documents/kiln/examples/hello-counter/src"
+      ]
+    }
+  ]
+}
