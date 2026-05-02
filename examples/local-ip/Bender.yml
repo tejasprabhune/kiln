@@ -1,0 +1,5 @@
+package:
+  name: local_ip
+
+sources:
+  - src/counter.sv
