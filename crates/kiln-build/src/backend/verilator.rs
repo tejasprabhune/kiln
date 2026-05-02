@@ -91,6 +91,9 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
         cmd.arg("-O3");
         cmd.arg("--x-assign").arg("0");
     }
+    if plan.trace {
+        cmd.arg("--trace").arg("--trace-fst");
+    }
     for inc in &plan.include_dirs {
         cmd.arg("-I").arg(inc);
     }

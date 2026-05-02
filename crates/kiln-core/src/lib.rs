@@ -27,5 +27,6 @@ pub mod project;
 
 pub use manifest::{
     Design, LintConfig, LintSeverity, Manifest, ManifestError, Package, ValidateOptions,
+    WaveConfig, WaveFormat,
 };
 pub use project::{find_manifest, ProjectError, MANIFEST_FILENAME};

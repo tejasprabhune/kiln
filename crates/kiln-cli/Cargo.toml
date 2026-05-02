@@ -19,6 +19,7 @@ kiln-deps.workspace = true
 kiln-fmt.workspace = true
 kiln-lint.workspace = true
 kiln-test.workspace = true
+kiln-wave.workspace = true
 slang-rs.workspace = true
 clap.workspace = true
 anyhow.workspace = true

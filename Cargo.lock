@@ -402,6 +402,7 @@ dependencies = [
  "kiln-fmt",
  "kiln-lint",
  "kiln-test",
+ "kiln-wave",
  "predicates",
  "serde_json",
  "slang-rs",
@@ -498,6 +499,7 @@ name = "kiln-wave"
 version = "0.1.0"
 dependencies = [
  "kiln-core",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

@@ -6,13 +6,14 @@ use anyhow::{anyhow, Context, Result};
 
 use kiln_build::SourceSet;
 use kiln_core::{find_manifest, Manifest};
-use kiln_test::{discover, run_many};
+use kiln_test::{discover, run_many_with_options};
 
 pub fn run(
     filter: Option<String>,
     jobs: Option<usize>,
     no_fail_fast: bool,
     list: bool,
+    trace: bool,
 ) -> Result<()> {
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;
@@ -55,7 +56,15 @@ pub fn run(
             .map(|n| n.get())
             .unwrap_or(1)
     });
-    let outcomes = run_many(&project_root, &manifest, &source_set, &tests, jobs);
+    let trace_effective = trace || manifest.wave.enabled_by_default;
+    let outcomes = run_many_with_options(
+        &project_root,
+        &manifest,
+        &source_set,
+        &tests,
+        jobs,
+        trace_effective,
+    );
 
     let mut passed = 0usize;
     let mut failed = 0usize;

@@ -10,6 +10,7 @@ mod deps;
 mod fmt;
 mod new;
 mod test;
+mod wave;
 
 /// The `kiln` CLI.
 #[derive(Debug, Parser)]
@@ -129,6 +130,18 @@ enum Command {
         /// Print discovered tests, do not run.
         #[arg(long)]
         list: bool,
+        /// Build with FST trace support and dump waves to target/kiln/waves/.
+        #[arg(long)]
+        trace: bool,
+    },
+
+    /// Open a recorded FST waveform in surfer.
+    Wave {
+        /// Test name. Defaults to the most recently produced FST.
+        test: Option<String>,
+        /// Print the FST path instead of opening surfer.
+        #[arg(long)]
+        print_path: bool,
     },
 
     /// Parse `Kiln.toml` and print the resolved manifest. Used by tests.
@@ -179,7 +192,9 @@ impl Cli {
                 jobs,
                 no_fail_fast,
                 list,
-            } => test::run(filter, jobs, no_fail_fast, list),
+                trace,
+            } => test::run(filter, jobs, no_fail_fast, list, trace),
+            Command::Wave { test, print_path } => wave::run(test, print_path),
             Command::CheckManifest { path } => check_manifest::run(path.as_deref()),
         }
     }

@@ -33,6 +33,12 @@ pub struct BuildPlan {
     pub include_dirs: Vec<PathBuf>,
     pub defines: BTreeMap<String, String>,
     pub profile: Profile,
+    /// When true, the simulator binary dumps an FST trace. The
+    /// testbench is responsible for `$dumpfile`/`$dumpvars` calls;
+    /// `kiln-build` passes `+define+KILN_TRACE` so testbenches can
+    /// gate the dump on `\`ifdef KILN_TRACE`.
+    #[serde(default)]
+    pub trace: bool,
 }
 
 impl BuildPlan {
@@ -49,7 +55,19 @@ impl BuildPlan {
                 .collect(),
             defines: manifest.design.defines.clone(),
             profile,
+            trace: false,
         }
+    }
+
+    /// Builder-style: enable tracing.
+    pub fn with_trace(mut self, on: bool) -> Self {
+        self.trace = on;
+        if on {
+            self.defines.insert("KILN_TRACE".to_string(), String::new());
+        } else {
+            self.defines.remove("KILN_TRACE");
+        }
+        self
     }
 }
 

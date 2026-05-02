@@ -1,5 +1,6 @@
-// Second test: parity sanity check. Drives reset, lets a few cycles
-// run, asserts that count toggles between odd and even values.
+// Parity test: drives reset, runs a few cycles, asserts that count
+// toggles between odd and even values. With `KILN_TRACE` defined,
+// dumps an FST trace.
 module parity;
     logic       clk;
     logic       rst_n;
@@ -13,6 +14,13 @@ module parity;
         clk = 1'b0;
         forever #5 clk = ~clk;
     end
+
+`ifdef KILN_TRACE
+    initial begin
+        $dumpfile("parity.fst");
+        $dumpvars(0, parity);
+    end
+`endif
 
     initial begin
         even_seen = 1'b0;
