@@ -29,7 +29,10 @@
     <code>kiln</code> itself only needs a Rust toolchain. The runtime tools
     (Slang, Verilator, etc.) are installed separately via <code>kiln install-tools</code>.
   </p>
-  <pre><code><span class="comment"># install the kiln binary</span>
+  <pre><code><span class="comment"># macOS and Linux (no Rust required)</span>
+curl -fsSL https://raw.githubusercontent.com/tejasprabhune/kiln/main/install.sh | sh
+
+<span class="comment"># or via cargo</span>
 cargo install kiln-sv
 
 <span class="comment"># install the runtime tools (slang, verilator, verible, surfer, bender)</span>

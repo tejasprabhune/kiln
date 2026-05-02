@@ -47,9 +47,6 @@ jobs:
         with:
           toolchain: "1.93"
       - uses: Swatinem/rust-cache@v2
-      # Default-features only. The `e2e` features in slang-rs and
-      # kiln-cli require `slang` / `verilator` on PATH and are exercised
-      # by the dedicated `test-e2e-*` jobs below.
       - run: cargo test --workspace
 
   test-e2e-verilator:
@@ -65,66 +62,6 @@ jobs:
         with:
           toolchain: "1.93"
       - uses: Swatinem/rust-cache@v2
-<<<<<<< HEAD
-=======
-      # `kiln-cli`'s e2e tests cover both `kiln build`/`run` (verilator)
-      # and `kiln check` (slang). Build slang too — same recipe as the
-      # standalone `test-e2e-slang` job below, cached on the same key.
-      - name: Cache slang build
-        id: cache-slang
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/slang
-          key: slang-v10.0-${{ matrix.os }}
-      - name: Build slang from source
-        if: steps.cache-slang.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y cmake ninja-build g++
-          fi
-          git clone --depth 1 --branch v10.0 https://github.com/MikePopoloski/slang.git /tmp/slang-src
-          cmake -S /tmp/slang-src -B /tmp/slang-src/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/slang-src/build -j
-          mkdir -p ~/.local/slang/bin
-          cp /tmp/slang-src/build/bin/slang ~/.local/slang/bin/
-      - name: Add slang to PATH
-        run: echo "$HOME/.local/slang/bin" >> "$GITHUB_PATH"
->>>>>>> 1b3983e (fix(ci): split e2e into per-tool jobs, bump MSRV to 1.93, drop CI badge)
-      - name: Install verilator (macOS)
-        if: runner.os == 'macOS'
-        run: brew install verilator
-      - name: Cache verilator build (Linux)
-        if: runner.os == 'Linux'
-        id: cache-verilator
-        uses: actions/cache@v4
-        with:
-          path: ~/.local/verilator
-          key: verilator-v5.026-ubuntu-22.04
-      - name: Build verilator from source (Linux)
-<<<<<<< HEAD
-        # Ubuntu 22.04's apt verilator is 4.038, which doesn't support
-        # the --binary flag introduced in Verilator 5.0. Build v5.026
-        # from source instead, cached.
-=======
-        # Ubuntu 22.04 apt has Verilator 4.038, which predates `--binary`
-        # (introduced in 5.0). Build v5.026 from source, cached.
->>>>>>> 1b3983e (fix(ci): split e2e into per-tool jobs, bump MSRV to 1.93, drop CI badge)
-        if: runner.os == 'Linux' && steps.cache-verilator.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y git make autoconf g++ flex bison libfl2 libfl-dev help2man
-          git clone --depth 1 --branch v5.026 https://github.com/verilator/verilator.git /tmp/verilator-src
-          cd /tmp/verilator-src
-          autoconf
-          ./configure --prefix="$HOME/.local/verilator"
-          make -j"$(nproc)"
-          make install
-      - name: Add verilator to PATH (Linux)
-        if: runner.os == 'Linux'
-        run: echo "$HOME/.local/verilator/bin" >> "$GITHUB_PATH"
       - name: Cache slang build
         id: cache-slang-on-verilator
         uses: actions/cache@v4
@@ -146,6 +83,31 @@ jobs:
           cp /tmp/slang-src/build/bin/slang ~/.local/slang/bin/
       - name: Add slang to PATH
         run: echo "$HOME/.local/slang/bin" >> "$GITHUB_PATH"
+      - name: Install verilator (macOS)
+        if: runner.os == 'macOS'
+        run: brew install verilator
+      - name: Cache verilator build (Linux)
+        if: runner.os == 'Linux'
+        id: cache-verilator
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/verilator
+          key: verilator-v5.026-ubuntu-22.04
+      - name: Build verilator from source (Linux)
+        if: runner.os == 'Linux' && steps.cache-verilator.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y git make autoconf g++ flex bison libfl2 libfl-dev help2man
+          git clone --depth 1 --branch v5.026 https://github.com/verilator/verilator.git /tmp/verilator-src
+          cd /tmp/verilator-src
+          autoconf
+          ./configure --prefix="$HOME/.local/verilator"
+          make -j"$(nproc)"
+          make install
+      - name: Add verilator to PATH (Linux)
+        if: runner.os == 'Linux'
+        run: echo "$HOME/.local/verilator/bin" >> "$GITHUB_PATH"
       - name: Install bender
         run: cargo install bender --version 0.31.0 --locked
       - name: Install verible (Linux)
@@ -173,7 +135,7 @@ jobs:
           bender --version
           verible-verilog-format --version
       - name: Run kiln-cli e2e tests
-        run: cargo test -p kiln-cli --features e2e
+        run: cargo test -p kiln-sv-cli --features e2e
 
   test-e2e-slang:
     name: e2e (slang on ${{ matrix.os }})
@@ -212,4 +174,4 @@ jobs:
       - name: Verify slang
         run: slang --version
       - name: Run slang-rs e2e tests
-        run: cargo test -p slang-rs --features e2e
+        run: cargo test -p slang-sv-rs --features e2e

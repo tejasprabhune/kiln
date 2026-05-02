@@ -31,7 +31,10 @@
 
   <section>
     <h2>Getting started</h2>
-    <pre><code><span class="comment"># kiln itself only needs a Rust toolchain to build</span>
+    <pre><code><span class="comment"># macOS and Linux (no Rust required)</span>
+curl -fsSL https://raw.githubusercontent.com/tejasprabhune/kiln/main/install.sh | sh
+
+<span class="comment"># or via cargo</span>
 cargo install kiln-sv
 
 <span class="comment"># create and enter a new project</span>
