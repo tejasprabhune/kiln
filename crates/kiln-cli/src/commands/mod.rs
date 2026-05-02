@@ -10,6 +10,7 @@ mod deps;
 mod doc;
 mod fmt;
 mod install_tools;
+mod lsp;
 mod new;
 mod test;
 mod wave;
@@ -164,6 +165,10 @@ enum Command {
         print_path: bool,
     },
 
+    /// Run as a Language Server Protocol server (over stdio). Editors
+    /// spawn this; humans rarely run it directly.
+    Lsp,
+
     /// Install the external tools kiln drives (slang, verilator, …).
     InstallTools {
         /// Comma-separated list of tools. Defaults to all five.
@@ -232,6 +237,7 @@ impl Cli {
             } => test::run(filter, jobs, no_fail_fast, list, trace),
             Command::Doc { open } => doc::run(open),
             Command::Wave { test, print_path } => wave::run(test, print_path),
+            Command::Lsp => lsp::run(),
             Command::InstallTools {
                 tools,
                 build_from_source,

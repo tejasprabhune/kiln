@@ -34,12 +34,14 @@ const VERIBLE_TAG: &str = "v0.0-4053-g89d4d98a";
 const BENDER_VERSION: &str = "0.31.0";
 const SLANG_TAG: &str = "v10.0";
 const VERILATOR_TAG: &str = "v5.026";
+const SLANG_SERVER_TAG: &str = "v0.2.5";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ToolName {
     Bender,
     Verible,
     Surfer,
+    SlangServer,
     Slang,
     Verilator,
 }
@@ -50,6 +52,7 @@ impl ToolName {
             "bender" => Some(Self::Bender),
             "verible" | "verible-verilog-format" => Some(Self::Verible),
             "surfer" => Some(Self::Surfer),
+            "slang-server" | "slang_server" => Some(Self::SlangServer),
             "slang" => Some(Self::Slang),
             "verilator" => Some(Self::Verilator),
             _ => None,
@@ -61,6 +64,7 @@ impl ToolName {
             Self::Bender => "bender",
             Self::Verible => "verible",
             Self::Surfer => "surfer",
+            Self::SlangServer => "slang-server",
             Self::Slang => "slang",
             Self::Verilator => "verilator",
         }
@@ -74,6 +78,7 @@ impl ToolName {
             Self::Bender => "bender",
             Self::Verible => "verible-verilog-format",
             Self::Surfer => "surfer",
+            Self::SlangServer => "slang-server",
             Self::Slang => "slang",
             Self::Verilator => "verilator",
         }
@@ -193,6 +198,7 @@ fn parse_tool_list(requested: Option<Vec<String>>) -> Result<Vec<ToolName>> {
         ToolName::Bender,
         ToolName::Verible,
         ToolName::Surfer,
+        ToolName::SlangServer,
         ToolName::Slang,
         ToolName::Verilator,
     ];
@@ -203,7 +209,7 @@ fn parse_tool_list(requested: Option<Vec<String>>) -> Result<Vec<ToolName>> {
             .map(|s| {
                 ToolName::from_str(s).ok_or_else(|| {
                     anyhow!(
-                        "unknown tool `{s}`; choose from: bender, verible, surfer, slang, verilator"
+                        "unknown tool `{s}`; choose from: bender, verible, surfer, slang-server, slang, verilator"
                     )
                 })
             })
@@ -216,6 +222,7 @@ fn install_one(tool: ToolName, prefix: &Path) -> Result<()> {
         ToolName::Bender => install_via_cargo("bender", BENDER_VERSION),
         ToolName::Surfer => install_surfer(),
         ToolName::Verible => install_verible(prefix),
+        ToolName::SlangServer => install_slang_server(prefix),
         ToolName::Slang => install_slang(prefix),
         ToolName::Verilator => install_verilator(prefix),
     }
@@ -304,6 +311,79 @@ fn host_target_for_verible() -> Result<&'static str> {
              https://github.com/chipsalliance/verible/releases"
         ))
     }
+}
+
+// ---------- slang-server (prebuilt tarball) ----------
+
+fn install_slang_server(prefix: &Path) -> Result<()> {
+    let asset = host_asset_for_slang_server()?;
+    let url = format!(
+        "https://github.com/hudson-trading/slang-server/releases/download/{SLANG_SERVER_TAG}/{asset}"
+    );
+    let dest = prefix.join("slang-server");
+    reporter::status(
+        "Downloading",
+        format!("`slang-server` {SLANG_SERVER_TAG} ({asset})"),
+    );
+    download_and_extract(&url, &dest, /* strip_components */ 0)?;
+
+    // The release tarball lays out `slang-server` directly in the dest
+    // root (no nested `bin/` like verible). Locate it and symlink.
+    let bin = find_slang_server_binary(&dest)?;
+    symlink_into_bin(&bin, prefix)?;
+    reporter::status(
+        "Installed",
+        format!(
+            "`slang-server` at {}",
+            reporter::dim(&prefix.join("bin/slang-server").display().to_string())
+        ),
+    );
+    Ok(())
+}
+
+fn host_asset_for_slang_server() -> Result<&'static str> {
+    if cfg!(target_os = "macos") {
+        Ok("slang-server-macos.tar.gz")
+    } else if cfg!(target_os = "linux") && cfg!(target_arch = "x86_64") {
+        // Prefer the gcc build on Linux (more compatible glibc baseline).
+        Ok("slang-server-linux-x64-gcc.tar.gz")
+    } else if cfg!(target_os = "windows") {
+        Ok("slang-server-windows-x64.zip")
+    } else {
+        Err(anyhow!(
+            "no slang-server prebuilt for this platform; install from \
+             https://github.com/hudson-trading/slang-server/releases"
+        ))
+    }
+}
+
+/// The slang-server release tarballs put the binary either at the root
+/// of the archive or under a single nested directory. Search for it.
+fn find_slang_server_binary(root: &Path) -> Result<PathBuf> {
+    fn walk(dir: &Path, depth: usize) -> Option<PathBuf> {
+        if depth > 3 {
+            return None;
+        }
+        let entries = std::fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() && p.file_name().and_then(|s| s.to_str()) == Some("slang-server") {
+                return Some(p);
+            }
+            if p.is_dir() {
+                if let Some(found) = walk(&p, depth + 1) {
+                    return Some(found);
+                }
+            }
+        }
+        None
+    }
+    walk(root, 0).ok_or_else(|| {
+        anyhow!(
+            "could not find `slang-server` binary inside extracted tarball at {}",
+            root.display()
+        )
+    })
 }
 
 // ---------- slang (cmake from source) ----------
@@ -596,7 +676,7 @@ mod tests {
     #[test]
     fn parse_tool_list_default_is_all() {
         let list = parse_tool_list(None).unwrap();
-        assert_eq!(list.len(), 5);
+        assert_eq!(list.len(), 6);
     }
 
     #[test]
