@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use kiln_build::backend::verilator;
 use kiln_build::{BuildPlan, Profile, SourceSet};
 use kiln_core::{find_manifest, Manifest};
+use kiln_deps::ResolvedSources;
 
 use crate::render;
 
@@ -25,13 +26,28 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
 
-    let source_set = SourceSet::resolve(&project_root, &manifest)?;
+    let mut source_set = SourceSet::resolve(&project_root, &manifest)?;
+    let mut dep_include_dirs: Vec<std::path::PathBuf> = Vec::new();
+    if !manifest.dependencies.is_empty() {
+        let resolved: ResolvedSources = kiln_deps::resolve(&project_root, &manifest)?;
+        for f in resolved.all_files() {
+            if !source_set.files.contains(&f) {
+                source_set.files.push(f);
+            }
+        }
+        dep_include_dirs = resolved.all_include_dirs();
+    }
     let profile = if release {
         Profile::Release
     } else {
         Profile::Debug
     };
-    let plan = BuildPlan::new(&manifest, &source_set, profile);
+    let mut plan = BuildPlan::new(&manifest, &source_set, profile);
+    for d in dep_include_dirs {
+        if !plan.include_dirs.contains(&d) {
+            plan.include_dirs.push(d);
+        }
+    }
 
     let outcome = verilator::compile(&plan)?;
 

@@ -1,0 +1,12 @@
+[package]
+name = "with_deps"
+version = "0.1.0"
+description = "Example consuming a path-based local dependency."
+license = "MIT OR Apache-2.0"
+
+[design]
+top = "consumer_top"
+sources = ["src/**/*.sv"]
+
+[dependencies]
+local_ip = { path = "../local-ip" }

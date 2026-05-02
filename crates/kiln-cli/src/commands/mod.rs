@@ -6,6 +6,7 @@ use clap::{Parser, Subcommand};
 mod build;
 mod check;
 mod check_manifest;
+mod deps;
 mod new;
 
 /// The `kiln` CLI.
@@ -72,6 +73,37 @@ enum Command {
     /// Remove the kiln build cache (`target/kiln/`).
     Clean,
 
+    /// Add a dependency to `Kiln.toml` and refresh `Kiln.lock`.
+    #[command(disable_version_flag = true)]
+    Add {
+        /// Dependency name.
+        name: String,
+        /// Git URL.
+        #[arg(long, group = "source")]
+        git: Option<String>,
+        /// Git revision (e.g., a tag or commit).
+        #[arg(long, requires = "git")]
+        rev: Option<String>,
+        /// Git branch.
+        #[arg(long, requires = "git")]
+        branch: Option<String>,
+        /// Semver version constraint (for git deps that publish tags).
+        #[arg(long, requires = "git")]
+        version: Option<String>,
+        /// Local filesystem path.
+        #[arg(long, group = "source")]
+        path: Option<PathBuf>,
+    },
+
+    /// Remove a dependency from `Kiln.toml` and refresh `Kiln.lock`.
+    Remove { name: String },
+
+    /// Refresh `Kiln.lock` against `Kiln.toml`.
+    Update,
+
+    /// Print the dependency tree.
+    Tree,
+
     /// Parse `Kiln.toml` and print the resolved manifest. Used by tests.
     #[command(hide = true)]
     CheckManifest {
@@ -97,6 +129,17 @@ impl Cli {
                 args,
             } => build::run_run(release, verbose, args),
             Command::Clean => build::run_clean(),
+            Command::Add {
+                name,
+                git,
+                rev,
+                branch,
+                version,
+                path,
+            } => deps::run_add(name, git, rev, branch, version, path),
+            Command::Remove { name } => deps::run_remove(name),
+            Command::Update => deps::run_update(),
+            Command::Tree => deps::run_tree(),
             Command::CheckManifest { path } => check_manifest::run(path.as_deref()),
         }
     }

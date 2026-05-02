@@ -59,8 +59,24 @@ because the project has not yet been created.
 
 ## `[dependencies]`
 
-Empty in M0. Populated in M4 with git, path, and version-based dependencies.
-See `kiln-milestones.md` §M4 for the planned schema.
+Each entry is one of:
+
+```toml
+[dependencies]
+# Git dep with semver constraint (resolved against the repo's tags).
+axi          = { git = "https://github.com/pulp-platform/axi.git", version = "0.39" }
+# Git dep pinned to a tag or commit.
+common_cells = { git = "https://github.com/pulp-platform/common_cells.git", rev = "v1.32.0" }
+# Path dep (relative to the project root, or absolute).
+local_ip     = { path = "../local_ip" }
+```
+
+The schema is parsed and validated by `kiln_deps::Dependency`. Unknown
+shapes (e.g., a hypothetical `registry = "crates"` entry) are rejected
+with a `BadDependency` error.
+
+`kiln update` writes the resolved versions and content hashes to
+`Kiln.lock`. See `docs/lockfile-spec.md` for the lockfile schema.
 
 ## `[lint]`
 
