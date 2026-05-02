@@ -20,3 +20,6 @@ design:
     FOO: "1"
 dependencies: {}
 lint: {}
+wave:
+  format: fst
+  enabled_by_default: false

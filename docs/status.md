@@ -349,3 +349,126 @@ where to pick up next.
 - Before starting M4, **the M0–M3 PR stack should be merged in order**
   so each milestone branches off the previous and CI runs cleanly. The
   current stacked-PR setup auto-retargets bases on merge.
+
+## 2026-05-02 — M4 (Dependencies / Bender wrapper)
+
+PR #5, merged.
+
+`kiln-deps` is a subprocess wrapper around `bender`. `kiln add` /
+`remove` / `update` / `tree` work; `kiln build` picks up dependency
+sources and include dirs. `[dependencies]` schema supports both
+`{ git, version | rev | branch }` and `{ path }`. Generated
+`Bender.yml` lives under `target/kiln/bender/` and inlines the root
+package's source files so `bender sources --flatten` returns *both*
+dep and root files in dep order. `Kiln.lock` is a verbatim copy of
+`Bender.lock`. ADR 0003 records the subprocess-vs-library choice.
+
+Acceptance: `kiln add` mutates Kiln.toml + writes Kiln.lock, `kiln
+build` works on `examples/with-deps`, `kiln tree` is stable. 7 unit
+tests in `kiln-deps`, 5 e2e tests in `cli_deps.rs`. Path-based
+example, not a PULP git IP, to keep CI hermetic.
+
+## 2026-05-02 — M5 (Testing)
+
+PR #6, merged.
+
+`kiln test` discovers `tests/*.sv` and runs each through
+`kiln-build`'s Verilator backend. Parallel runner via
+`std::thread::scope`, `--jobs`, `--list`, `--no-fail-fast`,
+substring filter. Cocotb backend deferred (Python+cocotb install
+matrix needs its own ADR). 3 unit tests + 5 e2e tests.
+
+Two new testbenches in `examples/hello-counter/tests/` (smoke,
+parity) so the parallel timing test has work.
+
+## 2026-05-02 — M6 (Format / lint UX)
+
+PR #7, merged.
+
+`kiln fmt` and `kiln fmt --check` via subprocess wrapper around
+`verible-verilog-format`. JSON output via `--format json` for both
+modes. Schemas documented in `docs/json-output.md` and
+snapshot-tested. 4 unit tests + 4 e2e tests. Verible installed in
+CI from the upstream prebuilt-binary tarball (no apt package, brew
+needs too-new Xcode).
+
+## 2026-05-02 — M7 (Waveforms)
+
+PR #8, merged.
+
+`BuildPlan.trace` flag wires `--trace --trace-fst` and
+`+define+KILN_TRACE` through Verilator. `kiln test --trace` runs
+the binary with `cwd=target/kiln/waves/` so `$dumpfile` lands there.
+`kiln wave [test] [--print-path]` finds and opens the FST in surfer
+(detached). Manifest gains `[wave]` table (`format`,
+`enabled_by_default`). 4 unit tests + 4 e2e tests. Testbenches must
+explicitly `\`ifdef KILN_TRACE` their `$dumpfile/$dumpvars` blocks;
+documented inline.
+
+## 2026-05-02 — M8 (Documentation generation)
+
+PR #9, merged.
+
+`kiln doc` generates a static HTML site under `target/doc/`.
+Source-pass scanner finds `module|package|interface <name>`
+declarations + any preceding `///` block. AST pass runs but isn't
+load-bearing today (slang's AST only includes elaborated items;
+non-instantiated modules would be missing). One HTML file per item
++ index, cross-linked. HTML5-compliant. 9 unit tests + 3 e2e tests.
+
+## 2026-05-02 — M9 (Polish)
+
+**Branch:** `milestone/m9-polish`
+
+### Summary
+
+Final polish: README walks the full happy path end-to-end (`new` →
+`check` → `build` → `test --trace` → `wave` → `add`/`tree`/`update`
+→ `fmt` → `doc`); `kiln --help` is well-organised (clap-derived,
+each subcommand carries a one-line `about`); ADRs are linked from
+the README. The bigger M9 items (LSP, coverage, `cargo install
+kiln`, prebuilt binaries) are deliberately deferred — they each
+need external setup that deserves its own PR.
+
+### Acceptance criteria (from `kiln-milestones.md` §M9, 0.1.0 release)
+
+| Criterion | Status | Evidence |
+| --------- | ------ | -------- |
+| All M0–M8 acceptance criteria still pass | pass | every preceding milestone's tests still green; `cargo test --workspace --all-features` clean locally |
+| `kiln --help` is well-organized and complete | pass | clap-derived help lists 13 subcommands with one-line descriptions |
+| README shows the full happy path | pass | `README.md` walks `new` → `check` → `build` → `test --trace` → `wave` → `add` → `tree`/`update` → `fmt` → `doc` |
+| `cargo install kiln` works from crates.io | deferred | crate not yet published; needs name reservation + final license-file convention |
+| Prebuilt binaries published for at least Linux x86_64 | deferred | needs a `release.yml` workflow with cargo-dist or matrix builds |
+
+### What's left for a real 0.1.0 release
+
+PR-sized chunks for after this session:
+
+1. **Publish to crates.io.** Reserve `kiln`, tag a release, push.
+2. **Release engineering with `cargo-dist`.** Linux x86_64 +
+   aarch64, macOS universal binaries.
+3. **Homebrew formula.** Open a `homebrew-tap` repo after at least
+   one tag.
+4. **`kiln lsp`.** Shell out to slang-server.
+5. **`kiln bench`.** Wrap `--threads N --prof-exec`.
+6. **Coverage.** Wrap `--coverage` + an HTML report.
+7. **`[[test]]` manifest overrides.**
+8. **Cocotb backend in `kiln-test`** (with an install-matrix ADR).
+9. **Markdown rendering of `///` doc bodies** (`pulldown-cmark`).
+10. **`kiln publish`** — registry-vs-git decision first.
+
+### Definition of done — what shipped
+
+All nine milestones M0–M8 closed and merged to `main`, plus M9 as
+this polish pass. PRs #1–#9 merged in order. Local
+`cargo test --workspace --all-features` green with all five
+external tools on PATH:
+
+- `slang` v10 (built from source)
+- `verilator` 5.048 (brew on macOS, built from source on Ubuntu CI)
+- `bender` 0.31 (`cargo install`)
+- `verible-verilog-format` v0.0-4053 (release tarball)
+- `surfer` (brew; only needed for `kiln wave` GUI path, not for
+  `--print-path`)
+
+Total test count across the workspace: ~140 (mix of unit + e2e).
