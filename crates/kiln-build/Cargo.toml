@@ -1,6 +1,6 @@
 [package]
 name = "kiln-build"
-description = "Build pipeline and simulator backends for kiln. Stub at M0; populated from M2."
+description = "Build pipeline and Verilator backend for kiln."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,3 +12,16 @@ authors.workspace = true
 kiln-core.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+glob.workspace = true
+walkdir.workspace = true
+blake3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+insta.workspace = true
+
+[features]
+# Enables tests that invoke the real `verilator` binary on PATH.
+e2e = []

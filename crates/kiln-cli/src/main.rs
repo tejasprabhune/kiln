@@ -3,6 +3,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 mod commands;
+mod render;
 
 use commands::Cli;
 

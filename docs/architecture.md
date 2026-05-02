@@ -39,17 +39,28 @@ kiln-build, kiln-deps, kiln-lint, kiln-fmt, kiln-test, kiln-wave, kiln-doc
 
 ## Data flow at the milestone we're at
 
-At M0, the data flow is intentionally minimal:
+At M2, the build pipeline is wired end-to-end. `kiln build` walks
+manifest → source set → plan → cache key → Verilator subprocess →
+parsed diagnostics → terminal.
 
-```
-Kiln.toml ──[serde + validation]──> Manifest ──> kiln check-manifest (prints)
-                                            \──> kiln new / kiln init (writes template)
+```mermaid
+flowchart LR
+    A[Kiln.toml] -->|serde + validate| B[Manifest]
+    B --> C[SourceSet::resolve<br/>glob expansion]
+    C --> D[BuildPlan::new<br/>top + flags + profile]
+    D --> E[BuildCacheKey<br/>blake3 source content + flags]
+    E -->|hit| H[target/kiln/&lt;hash&gt;/V&lt;top&gt;]
+    E -->|miss| F[verilator --binary<br/>subprocess]
+    F --> G[parse_output<br/>%Sev-CODE: file:line:col: msg]
+    G --> H
+    H --> I[kiln run<br/>execute binary]
+    G --> J[render diagnostics<br/>plain caret today, ariadne later]
 ```
 
-M1 introduces `slang-rs` and the subprocess invocation discipline (one
-helper, version validation, captured-fixture tests). M2 introduces the
-build cache and Verilator backend. From M3 onward, `kiln check` uses the
-typed AST that `slang-rs` exposes.
+`kiln check` (M3) reuses the same diagnostic-rendering layer but drives
+slang elaboration via `slang-rs` instead of Verilator. M4 expands
+`SourceSet` with Bender-resolved dependencies. M5 adds a second backend
+(Cocotb) onto the same `BuildPlan`.
 
 ## Key design principles
 
