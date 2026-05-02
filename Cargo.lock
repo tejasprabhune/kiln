@@ -399,9 +399,11 @@ dependencies = [
  "kiln-build",
  "kiln-core",
  "kiln-deps",
+ "kiln-fmt",
  "kiln-lint",
  "kiln-test",
  "predicates",
+ "serde_json",
  "slang-rs",
  "tempfile",
  "toml",
@@ -457,7 +459,11 @@ dependencies = [
 name = "kiln-fmt"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "kiln-core",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]
