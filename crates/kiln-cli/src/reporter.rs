@@ -72,7 +72,7 @@ pub fn status(verb: &str, message: impl fmt::Display) {
 }
 
 /// Cyan-bold "informational" prefix. Used for things that aren't a
-/// success and aren't a warning — e.g., "Cache hit", "Skipping".
+/// success and aren't a warning; e.g., "Cache hit", "Skipping".
 pub fn info(verb: &str, message: impl fmt::Display) {
     let r = Reporter::get();
     let _ = writeln!(
@@ -82,7 +82,7 @@ pub fn info(verb: &str, message: impl fmt::Display) {
     );
 }
 
-/// Yellow `warning:` prefix. Unused for now — kept on the public surface
+/// Yellow `warning:` prefix. Unused for now, kept on the public surface
 /// because every other CLI helper exposes the matching severity.
 #[allow(dead_code)]
 pub fn warning(message: impl fmt::Display) {

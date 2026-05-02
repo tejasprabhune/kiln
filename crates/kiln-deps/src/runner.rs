@@ -63,7 +63,7 @@ fn locate() -> Result<PathBuf, BenderError> {
 }
 
 /// Run `bender <args...>` in `cwd`, surface non-zero exits as
-/// [`BenderError::Cli`]. Output is *not* captured — it streams to the
+/// [`BenderError::Cli`]. Output is *not* captured; it streams to the
 /// caller's stdout/stderr (use [`run_bender_capture`] when the output
 /// matters).
 pub(crate) fn run_bender(cwd: &Path, args: &[&str]) -> Result<(), BenderError> {

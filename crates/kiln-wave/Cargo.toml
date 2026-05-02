@@ -1,5 +1,5 @@
 [package]
-name = "kiln-wave"
+name = "kiln-sv-wave"
 description = "Surfer waveform integration for kiln."
 version.workspace = true
 edition.workspace = true

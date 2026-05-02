@@ -1,5 +1,5 @@
 [package]
-name = "kiln-deps"
+name = "kiln-sv-deps"
 description = "Dependency resolution for kiln. Wraps bender as a subprocess."
 version.workspace = true
 edition.workspace = true

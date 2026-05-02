@@ -2,7 +2,7 @@
 //!
 //! Gated behind the `e2e` feature. Verilator is required (the test
 //! invocation builds + runs each testbench). Surfer is **not** required
-//! by these tests — we use `kiln wave --print-path` to assert the FST
+//! by these tests; we use `kiln wave --print-path` to assert the FST
 //! exists, which doesn't need to spawn the GUI.
 
 #![cfg(feature = "e2e")]

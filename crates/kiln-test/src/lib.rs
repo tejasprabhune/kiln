@@ -1,6 +1,6 @@
 // `RunError` carries the per-test invocation context.
 #![allow(clippy::result_large_err)]
-// The runner's `Vec<Option<Result<...>>>` shape is intentional — it lets
+// The runner's `Vec<Option<Result<...>>>` shape is intentional: it lets
 // the parallel scheduler write results back in input-order while
 // preserving per-test errors.
 #![allow(clippy::type_complexity)]

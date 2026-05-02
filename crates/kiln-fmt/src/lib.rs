@@ -1,6 +1,6 @@
 // `FmtError` carries paths and captured stderr from the verible invocation.
 #![allow(clippy::result_large_err)]
-//! Formatting for `kiln` — subprocess wrapper around
+//! Formatting for `kiln`: subprocess wrapper around
 //! [`verible-verilog-format`](https://github.com/chipsalliance/verible).
 
 use std::path::{Path, PathBuf};

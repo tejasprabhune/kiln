@@ -1,5 +1,5 @@
 [package]
-name = "slang-rs"
+name = "slang-sv-rs"
 description = "Pure-Rust subprocess wrapper around the slang SystemVerilog compiler CLI."
 version.workspace = true
 edition.workspace = true
@@ -7,6 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+
+[lib]
+name = "slang_rs"
 
 [dependencies]
 serde.workspace = true

@@ -215,7 +215,7 @@ fn is_executable(p: &Path) -> bool {
 }
 
 /// Create a tempdir for slang JSON outputs. Uses the system tempdir; the
-/// `_in_target` name is aspirational — once `kiln-build` lands a build
+/// `_in_target` name is aspirational; once `kiln-build` lands a build
 /// cache (M2), we'll point this at `target/kiln/` for reuse.
 fn tempdir_in_target() -> Result<tempfile::TempDir, SlangError> {
     tempfile::tempdir().map_err(|e| SlangError::Invocation {
