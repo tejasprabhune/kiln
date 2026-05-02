@@ -184,7 +184,7 @@ local_ip = { path = "../local_ip" }</code></pre>
     Values are <code>"error"</code>, <code>"warn"</code>, or <code>"allow"</code>.
   </p>
   <pre><code>[lint]
-timescale-missing    = "allow"   <span class="comment"># suppress missing-timescale warnings</span>
+no-timescale-unit    = "allow"   <span class="comment"># suppress missing-timescale warnings</span>
 width-trunc          = "error"   <span class="comment"># promote truncation warnings to errors</span>
 unused-net           = "warn"
 implicit-net         = "allow"</code></pre>
@@ -195,7 +195,7 @@ implicit-net         = "allow"</code></pre>
       <tr><th>Name</th><th>Default</th><th>What it covers</th></tr>
     </thead>
     <tbody>
-      <tr><td><code>timescale-missing</code></td><td>warn</td><td>No <code>`timescale</code> directive before a time-sensitive construct. Suppress this if your simulator sets a default timescale.</td></tr>
+      <tr><td><code>no-timescale-unit</code></td><td>warn</td><td>A design element lacks a <code>`timescale</code> directive while others in the design have one. Suppress this if your simulator sets a default timescale.</td></tr>
       <tr><td><code>width-trunc</code></td><td>warn</td><td>Implicit truncation when assigning a wider value to a narrower type.</td></tr>
       <tr><td><code>width-expand</code></td><td>warn</td><td>Implicit zero- or sign-extension when assigning to a wider type.</td></tr>
       <tr><td><code>implicit-net</code></td><td>warn</td><td>Net used without an explicit declaration (relies on implicit-wire rules).</td></tr>
@@ -218,6 +218,10 @@ implicit-net         = "allow"</code></pre>
   <p>
     Any diagnostic name accepted by <code>slang -W&lt;name&gt;</code> is valid here.
     Run <code>slang --help-diagnostics</code> for the full list.
+    If you're unsure of the key for a specific warning, <code>kiln check</code>
+    now prints it in brackets after the message — e.g.
+    <code>warning: ... [no-timescale-unit]</code> — so you can copy it directly
+    into <code>[lint]</code>.
     Setting a rule to <code>"error"</code> or <code>"warn"</code> also passes
     <code>-W&lt;name&gt;</code> to slang so diagnostics slang would normally suppress
     at the default level are surfaced. <code>"allow"</code> is post-filtering:
@@ -273,7 +277,7 @@ defines      = { SIMULATION = "" }
 common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.32" }
 
 [lint]
-timescale-missing    = "allow"
+no-timescale-unit    = "allow"
 width-trunc          = "error"
 unused-net           = "warn"
 implicit-net         = "allow"

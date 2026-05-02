@@ -18,14 +18,20 @@ pub fn render(diags: &[BuildDiagnostic]) -> String {
     for diag in diags {
         match (&diag.file, diag.line, diag.column) {
             (Some(file), Some(line), Some(col)) => {
+                let code = diag
+                    .code
+                    .as_deref()
+                    .map(|c| format!(" [{c}]"))
+                    .unwrap_or_default();
                 let _ = writeln!(
                     out,
-                    "{} {}:{}:{}: {}",
+                    "{} {}:{}:{}: {}{}",
                     severity_label(diag.severity),
                     file.display(),
                     line,
                     col,
-                    diag.message
+                    diag.message,
+                    code
                 );
                 if let Ok(text) = std::fs::read_to_string(file) {
                     if let Some(line_text) = text.lines().nth((line as usize).saturating_sub(1)) {
@@ -36,7 +42,18 @@ pub fn render(diags: &[BuildDiagnostic]) -> String {
                 }
             }
             _ => {
-                let _ = writeln!(out, "{} {}", severity_label(diag.severity), diag.message);
+                let code = diag
+                    .code
+                    .as_deref()
+                    .map(|c| format!(" [{c}]"))
+                    .unwrap_or_default();
+                let _ = writeln!(
+                    out,
+                    "{} {}{}",
+                    severity_label(diag.severity),
+                    diag.message,
+                    code
+                );
             }
         }
     }
