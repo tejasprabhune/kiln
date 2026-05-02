@@ -47,7 +47,10 @@ jobs:
         with:
           toolchain: "1.85"
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test --all-features --workspace
+      # Default-features only. The `e2e` features in slang-rs and
+      # kiln-cli require `slang` / `verilator` on PATH and are exercised
+      # by the dedicated `test-e2e-*` jobs below.
+      - run: cargo test --workspace
 
   test-e2e-slang:
     name: e2e (slang on ${{ matrix.os }})
