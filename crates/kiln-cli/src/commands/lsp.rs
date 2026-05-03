@@ -57,7 +57,8 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
-/// Locate `slang-server` on `PATH` or `$KILN_SLANG_SERVER_PATH`.
+/// Locate `slang-server` on `PATH`, `$KILN_SLANG_SERVER_PATH`, or the
+/// kiln-managed install dir (`$KILN_TOOLS_DIR` / `~/.local/share/kiln/bin`).
 pub(crate) fn locate_slang_server() -> Result<PathBuf> {
     if let Some(env) = std::env::var_os(ENV_OVERRIDE) {
         let p = PathBuf::from(env);
@@ -76,11 +77,27 @@ pub(crate) fn locate_slang_server() -> Result<PathBuf> {
             return Ok(candidate);
         }
     }
+    // Fall back to the kiln-managed install dir even if it's not on PATH.
+    if let Some(managed) = kiln_install_bin_dir() {
+        let candidate = managed.join("slang-server");
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
     Err(anyhow!(
         "could not find `slang-server` on PATH.\n\
          Install it with `kiln install-tools --tools slang-server`,\n\
          or set ${ENV_OVERRIDE} to a slang-server binary path."
     ))
+}
+
+/// Returns `$KILN_TOOLS_DIR/bin` or `~/.local/share/kiln/bin`.
+fn kiln_install_bin_dir() -> Option<PathBuf> {
+    if let Ok(env) = std::env::var("KILN_TOOLS_DIR") {
+        return Some(PathBuf::from(env).join("bin"));
+    }
+    let home = std::env::var("HOME").ok()?;
+    Some(PathBuf::from(home).join(".local/share/kiln/bin"))
 }
 
 /// The shape kiln writes to `.slang/server.json`. Public-ish for the unit
