@@ -488,6 +488,7 @@ dependencies = [
 name = "kiln-sv-test"
 version = "0.1.0"
 dependencies = [
+ "glob",
  "kiln-sv-build",
  "kiln-sv-core",
  "kiln-sv-deps",

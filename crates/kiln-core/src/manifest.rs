@@ -134,6 +134,14 @@ pub struct Design {
     /// not expose directly (e.g. `--timescale 1ns/1ps`).
     #[serde(default)]
     pub slang_args: Vec<String>,
+    /// Raw arguments forwarded verbatim to verilator. Use for flags kiln
+    /// does not expose directly (e.g. `--timing`, `-Wno-TIMESCALEMOD`).
+    #[serde(default)]
+    pub verilator_args: Vec<String>,
+    /// Glob patterns for testbench files. Overrides the default `tests/*.sv`
+    /// discovery when your testbenches live elsewhere (e.g. `sim/*_tb.sv`).
+    #[serde(default)]
+    pub test_sources: Vec<String>,
 }
 
 impl Design {

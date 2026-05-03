@@ -25,7 +25,7 @@ pub fn run(
         .to_path_buf();
     let manifest = Manifest::load(&manifest_path)?;
 
-    let mut tests = discover(&project_root)?;
+    let mut tests = discover(&project_root, &manifest)?;
     if let Some(f) = &filter {
         tests.retain(|t| t.name.contains(f));
     }

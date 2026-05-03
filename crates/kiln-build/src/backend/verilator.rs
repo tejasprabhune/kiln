@@ -107,6 +107,9 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
         arg.push(combined);
         cmd.arg(arg);
     }
+    for arg in &plan.extra_verilator_args {
+        cmd.arg(arg);
+    }
     for src in &plan.sources {
         cmd.arg(src);
     }

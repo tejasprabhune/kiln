@@ -39,6 +39,9 @@ pub struct BuildPlan {
     /// gate the dump on `\`ifdef KILN_TRACE`.
     #[serde(default)]
     pub trace: bool,
+    /// Extra flags forwarded verbatim to verilator.
+    #[serde(default)]
+    pub extra_verilator_args: Vec<String>,
 }
 
 impl BuildPlan {
@@ -56,6 +59,7 @@ impl BuildPlan {
             defines: manifest.design.defines.clone(),
             profile,
             trace: false,
+            extra_verilator_args: manifest.design.verilator_args.clone(),
         }
     }
 

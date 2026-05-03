@@ -15,6 +15,7 @@ name = "kiln_test"
 kiln-core.workspace = true
 kiln-build.workspace = true
 kiln-deps.workspace = true
+glob.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 serde.workspace = true

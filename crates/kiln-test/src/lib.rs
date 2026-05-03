@@ -52,16 +52,45 @@ pub struct DiscoveredTest {
     pub top: String,
 }
 
-/// Walk `<project_root>/tests/` for `*.sv` files. Each one is a
-/// testbench whose top module is the filename stem.
-pub fn discover(project_root: &Path) -> Result<Vec<DiscoveredTest>, TestError> {
-    let dir = project_root.join("tests");
+/// Discover testbenches. If the manifest specifies `design.test_sources`
+/// globs, those are expanded; otherwise falls back to `tests/*.sv`.
+pub fn discover(project_root: &Path, manifest: &Manifest) -> Result<Vec<DiscoveredTest>, TestError> {
+    if manifest.design.test_sources.is_empty() {
+        discover_dir(&project_root.join("tests"))
+    } else {
+        let mut out = Vec::new();
+        for pattern in &manifest.design.test_sources {
+            let full = project_root.join(pattern);
+            let pattern_str = full.to_string_lossy().into_owned();
+            let Ok(paths) = glob::glob(&pattern_str) else { continue };
+            for path in paths.flatten() {
+                if path.extension().and_then(|s| s.to_str()) == Some("sv") {
+                    let stem = path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or("test")
+                        .to_string();
+                    out.push(DiscoveredTest {
+                        name: stem.clone(),
+                        source: path,
+                        top: stem,
+                    });
+                }
+            }
+        }
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out.dedup_by(|a, b| a.source == b.source);
+        Ok(out)
+    }
+}
+
+fn discover_dir(dir: &Path) -> Result<Vec<DiscoveredTest>, TestError> {
     if !dir.is_dir() {
         return Ok(Vec::new());
     }
     let mut out = Vec::new();
-    let entries = std::fs::read_dir(&dir).map_err(|source| TestError::Io {
-        path: dir.clone(),
+    let entries = std::fs::read_dir(dir).map_err(|source| TestError::Io {
+        path: dir.to_path_buf(),
         source,
     })?;
     for entry in entries.flatten() {
