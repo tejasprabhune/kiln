@@ -285,7 +285,8 @@ fn run_buffered(
         .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    let passed = output.status.success() && stdout.contains("PASS");
+    let stdout_lower = stdout.to_lowercase();
+    let passed = output.status.success() && stdout_lower.contains("pass");
     Ok(TestOutcome { name: name.to_string(), passed, elapsed: start.elapsed(), stdout, stderr })
 }
 
@@ -320,7 +321,7 @@ fn run_streaming(
     if let Some(stdout_pipe) = child.stdout.take() {
         let reader = BufReader::new(stdout_pipe);
         for line in reader.lines().map_while(Result::ok) {
-            if line.contains("PASS") {
+            if line.to_lowercase().contains("pass") {
                 stdout_has_pass = true;
             }
             println!("{line}");
