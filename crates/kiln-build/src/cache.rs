@@ -41,6 +41,10 @@ impl BuildCacheKey {
             hasher.update(lib.as_bytes());
             hasher.update(b"\0");
         }
+        for flag in &plan.verilator_lint_flags {
+            hasher.update(flag.as_bytes());
+            hasher.update(b"\0");
+        }
 
         let mut sorted_defines: Vec<_> = plan.defines.iter().collect();
         sorted_defines.sort();
@@ -105,6 +109,7 @@ mod tests {
             timescale: None,
             language: None,
             libraries: vec![],
+            verilator_lint_flags: vec![],
             extra_verilator_args: vec![],
         }
     }

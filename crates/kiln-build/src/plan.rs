@@ -48,6 +48,10 @@ pub struct BuildPlan {
     /// Library search directories, passed as `-y <dir>` to verilator.
     #[serde(default)]
     pub libraries: Vec<String>,
+    /// Translated lint flags: `-Wno-NAME`, `-Wwarn-NAME`, `-Werror-NAME`.
+    /// Derived from `[lint.verilator]` in the manifest.
+    #[serde(default)]
+    pub verilator_lint_flags: Vec<String>,
     /// Extra flags forwarded verbatim to verilator.
     #[serde(default)]
     pub extra_verilator_args: Vec<String>,
@@ -96,10 +100,13 @@ impl BuildPlan {
             timescale: resolved.design.timescale.clone(),
             language,
             libraries: resolved.design.libraries.clone(),
+            verilator_lint_flags: build_verilator_lint_flags(&resolved.lint),
             extra_verilator_args: resolved.tool_verilator.extra_args.clone(),
         }
     }
+}
 
+impl BuildPlan {
     /// Builder-style: enable tracing.
     pub fn with_trace(mut self, on: bool) -> Self {
         self.trace = on;
@@ -110,6 +117,22 @@ impl BuildPlan {
         }
         self
     }
+}
+
+/// Translate `[lint.verilator]` rules into `-Wno-NAME` / `-Wwarn-NAME` /
+/// `-Werror-NAME` flags for the verilator command line.
+fn build_verilator_lint_flags(lint: &kiln_core::LintConfig) -> Vec<String> {
+    use kiln_core::LintSeverity;
+    let mut flags = Vec::new();
+    for (name, sev) in &lint.verilator {
+        let flag = match sev {
+            LintSeverity::Off | LintSeverity::Deny => format!("-Wno-{name}"),
+            LintSeverity::Warn => format!("-Wwarn-{name}"),
+            LintSeverity::Error => format!("-Werror-{name}"),
+        };
+        flags.push(flag);
+    }
+    flags
 }
 
 #[cfg(test)]
