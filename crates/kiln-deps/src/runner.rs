@@ -63,24 +63,25 @@ fn locate() -> Result<PathBuf, BenderError> {
 }
 
 /// Run `bender <args...>` in `cwd`, surface non-zero exits as
-/// [`BenderError::Cli`]. Output is *not* captured; it streams to the
-/// caller's stdout/stderr (use [`run_bender_capture`] when the output
-/// matters).
+/// [`BenderError::Cli`]. Bender's stdout/stderr are captured and
+/// discarded — kiln owns the terminal output and shows its own status lines.
 pub(crate) fn run_bender(cwd: &Path, args: &[&str]) -> Result<(), BenderError> {
     let bin = locate()?;
-    let status = Command::new(&bin)
+    let output = Command::new(&bin)
         .args(args)
         .current_dir(cwd)
         .stdin(Stdio::null())
-        .status()
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
         .map_err(|source| BenderError::Invocation {
             path: bin.clone(),
             source,
         })?;
-    if !status.success() {
+    if !output.status.success() {
         return Err(BenderError::Cli {
-            code: status.code().unwrap_or(-1),
-            stderr: format!("bender {} failed (no captured stderr)", args.join(" ")),
+            code: output.status.code().unwrap_or(-1),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         });
     }
     Ok(())

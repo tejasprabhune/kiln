@@ -2,9 +2,12 @@
 
 use anyhow::Result;
 use kiln_core::lint_map::{self, CANONICAL_RULES};
+use kiln_core::LintSeverity;
+
+use crate::reporter;
 
 pub fn run_list() -> Result<()> {
-    println!("Canonical rules (apply to all supported tools):");
+    eprintln!("{:>12} canonical rules\n", reporter::bold_white("Lint"));
     for rule in CANONICAL_RULES {
         let tools: Vec<&str> = [
             rule.slang_option.map(|_| "slang"),
@@ -13,11 +16,12 @@ pub fn run_list() -> Result<()> {
         .into_iter()
         .flatten()
         .collect();
-        println!(
-            "  {:<20} [{:?}]  ({})  {}",
+        let sev = severity_label(rule.default_severity);
+        eprintln!(
+            "  {:<20} {}  {}  {}",
             rule.canonical,
-            rule.default_severity,
-            tools.join(", "),
+            sev,
+            reporter::dim(&format!("({})", tools.join(", "))),
             rule.description,
         );
     }
@@ -27,28 +31,42 @@ pub fn run_list() -> Result<()> {
 pub fn run_explain(name: &str) -> Result<()> {
     match lint_map::lookup(name) {
         Some(rule) => {
-            println!("Rule: {}", rule.canonical);
-            println!("Default severity: {:?}", rule.default_severity);
+            eprintln!("{:>12} {}", reporter::bold_white("Rule"), rule.canonical);
+            eprintln!(
+                "{:>12} {}",
+                reporter::dim("severity"),
+                severity_label(rule.default_severity)
+            );
             if let Some(s) = rule.slang_option {
-                println!("Slang option: {s}");
+                eprintln!("{:>12} {s}", reporter::dim("slang"));
             }
             if let Some(v) = rule.verilator_code {
-                println!("Verilator code: {v}");
+                eprintln!("{:>12} {v}", reporter::dim("verilator"));
             }
-            println!();
-            println!("{}", rule.description);
-            // TODO: expand with longer description
+            eprintln!();
+            eprintln!("  {}", rule.description);
         }
         None => {
             let suggestion = lint_map::suggest(name);
             if let Some(s) = suggestion {
-                eprintln!("unknown lint rule `{name}`; did you mean `{s}`?");
+                reporter::error(format!("unknown lint rule `{name}`; did you mean `{s}`?"));
             } else {
-                eprintln!("unknown lint rule `{name}`");
-                eprintln!("Run `kiln lint list` to see all known rules.");
+                reporter::error(format!("unknown lint rule `{name}`"));
+                eprintln!(
+                    "       {} run `kiln lint list` to see all known rules",
+                    reporter::dim("hint:")
+                );
             }
             anyhow::bail!("unknown lint rule `{name}`");
         }
     }
     Ok(())
+}
+
+fn severity_label(sev: LintSeverity) -> String {
+    match sev {
+        LintSeverity::Error => reporter::red("error"),
+        LintSeverity::Warn => reporter::yellow("warn"),
+        LintSeverity::Off | LintSeverity::Deny => reporter::dim("off"),
+    }
 }

@@ -16,6 +16,7 @@ const GREEN_BOLD: &str = "\x1b[1;32m";
 const YELLOW_BOLD: &str = "\x1b[1;33m";
 const RED_BOLD: &str = "\x1b[1;31m";
 const CYAN_BOLD: &str = "\x1b[1;36m";
+const WHITE_BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[2m";
 const RESET: &str = "\x1b[0m";
 
@@ -140,6 +141,11 @@ pub fn yellow(s: &str) -> String {
 /// Wrap a static string in dim (deemphasised).
 pub fn dim(s: &str) -> String {
     Reporter::get().paint(DIM, s)
+}
+
+/// Wrap a string in bold white. Used for neutral headers (not success/warn/error).
+pub fn bold_white(s: &str) -> String {
+    Reporter::get().paint(WHITE_BOLD, s)
 }
 
 #[cfg(test)]
