@@ -51,16 +51,24 @@ pub struct DiscoveredTest {
     pub name: String,
     pub source: PathBuf,
     pub top: String,
+    /// Extra arguments appended to the simulation binary invocation.
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 /// Discover testbenches. If the manifest specifies `design.test_sources`
 /// globs, those are expanded; otherwise falls back to `tests/*.sv`.
+///
+/// Manifest `[[test.cases]]` entries are merged in: each case is emitted as
+/// a separate `DiscoveredTest` with its own `name` and `args`, referencing the
+/// compiled binary for `case.testbench`. Auto-discovered tests whose stem
+/// matches a case's `testbench` are suppressed so they don't also run bare.
 pub fn discover(
     project_root: &Path,
     manifest: &Manifest,
 ) -> Result<Vec<DiscoveredTest>, TestError> {
-    if manifest.design.test_sources.is_empty() {
-        discover_dir(&project_root.join("tests"))
+    let mut base: Vec<DiscoveredTest> = if manifest.design.test_sources.is_empty() {
+        discover_dir(&project_root.join("tests"))?
     } else {
         let mut out = Vec::new();
         for pattern in &manifest.design.test_sources {
@@ -80,14 +88,48 @@ pub fn discover(
                         name: stem.clone(),
                         source: path,
                         top: stem,
+                        args: Vec::new(),
                     });
                 }
             }
         }
         out.sort_by(|a, b| a.name.cmp(&b.name));
         out.dedup_by(|a, b| a.source == b.source);
-        Ok(out)
+        out
+    };
+
+    if manifest.test.cases.is_empty() {
+        return Ok(base);
     }
+
+    // Build a lookup: testbench stem -> source path from base discovery.
+    let stem_to_source: std::collections::HashMap<String, PathBuf> = base
+        .iter()
+        .map(|t| (t.top.clone(), t.source.clone()))
+        .collect();
+
+    // Suppress auto-discovered tests that are used as a parameterized base.
+    let used_as_base: std::collections::HashSet<String> = manifest
+        .test
+        .cases
+        .iter()
+        .map(|c| c.testbench.clone())
+        .collect();
+    base.retain(|t| !used_as_base.contains(&t.top));
+
+    // Emit one DiscoveredTest per manifest case.
+    for case in &manifest.test.cases {
+        if let Some(source) = stem_to_source.get(&case.testbench) {
+            base.push(DiscoveredTest {
+                name: case.name.clone(),
+                source: source.clone(),
+                top: case.testbench.clone(),
+                args: case.args.clone(),
+            });
+        }
+    }
+
+    Ok(base)
 }
 
 fn discover_dir(dir: &Path) -> Result<Vec<DiscoveredTest>, TestError> {
@@ -111,6 +153,7 @@ fn discover_dir(dir: &Path) -> Result<Vec<DiscoveredTest>, TestError> {
                 name: stem.clone(),
                 source: path,
                 top: stem,
+                args: Vec::new(),
             });
         }
     }
@@ -214,17 +257,18 @@ pub fn run_one_with_options(
     };
 
     if verbose {
-        run_streaming(&binary, resolved_cwd.as_deref(), &test.name, start)
+        run_streaming(&binary, resolved_cwd.as_deref(), &test.args, &test.name, start)
     } else {
-        run_buffered(&binary, resolved_cwd.as_deref(), &test.name, start)
+        run_buffered(&binary, resolved_cwd.as_deref(), &test.args, &test.name, start)
     }
 }
 
-fn make_cmd(binary: &Path, cwd: Option<&Path>) -> Command {
+fn make_cmd(binary: &Path, cwd: Option<&Path>, args: &[String]) -> Command {
     let mut cmd = Command::new(binary);
     if let Some(dir) = cwd {
         cmd.current_dir(dir);
     }
+    cmd.args(args);
     cmd
 }
 
@@ -232,10 +276,11 @@ fn make_cmd(binary: &Path, cwd: Option<&Path>) -> Command {
 fn run_buffered(
     binary: &Path,
     cwd: Option<&Path>,
+    args: &[String],
     name: &str,
     start: Instant,
 ) -> Result<TestOutcome, TestError> {
-    let output = make_cmd(binary, cwd)
+    let output = make_cmd(binary, cwd, args)
         .output()
         .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
@@ -251,10 +296,11 @@ fn run_buffered(
 fn run_streaming(
     binary: &Path,
     cwd: Option<&Path>,
+    args: &[String],
     name: &str,
     start: Instant,
 ) -> Result<TestOutcome, TestError> {
-    let mut child = make_cmd(binary, cwd)
+    let mut child = make_cmd(binary, cwd, args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()

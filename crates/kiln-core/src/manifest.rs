@@ -88,6 +88,32 @@ pub struct TestConfig {
     /// `../../software/...` paths.
     #[serde(default)]
     pub working_dir: Option<PathBuf>,
+
+    /// Explicit test cases. Each entry names a testbench (by file stem) and
+    /// provides runtime arguments (plusargs, etc.) for that invocation.
+    /// Multiple entries can reuse the same testbench with different args —
+    /// useful for parameterized testbenches like `c_tests_tb`.
+    ///
+    /// When this list is non-empty it is merged with the auto-discovered
+    /// testbenches: cases listed here use the named testbench's compiled
+    /// binary but are run as separate named tests with their own args.
+    #[serde(default)]
+    pub cases: Vec<TestCase>,
+}
+
+/// A single explicit test case that references a testbench by name and
+/// supplies runtime arguments for that invocation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TestCase {
+    /// Test name shown in output (e.g. `"fib"`).
+    pub name: String,
+    /// File stem of the testbench source (e.g. `"c_tests_tb"`).
+    pub testbench: String,
+    /// Extra arguments appended to the simulation binary invocation
+    /// (e.g. `["+hex_file=../../software/c_tests/fib/fib.hex", "+test_name=fib"]`).
+    #[serde(default)]
+    pub args: Vec<String>,
 }
 
 /// `[package]` table.

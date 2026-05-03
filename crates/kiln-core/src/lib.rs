@@ -28,9 +28,9 @@ pub mod profile;
 pub mod project;
 
 pub use manifest::{
-    Design, LintConfig, LintSeverity, Manifest, ManifestError, Package, SvLanguage, TestConfig,
-    ToolSlang, ToolVerible, ToolVerilator, Tools, TraceFormat, ValidateOptions, WaveConfig,
-    WaveFormat,
+    Design, LintConfig, LintSeverity, Manifest, ManifestError, Package, SvLanguage, TestCase,
+    TestConfig, ToolSlang, ToolVerible, ToolVerilator, Tools, TraceFormat, ValidateOptions,
+    WaveConfig, WaveFormat,
 };
 pub use profile::ResolvedConfig;
 pub use project::{find_manifest, ProjectError, MANIFEST_FILENAME};
