@@ -46,8 +46,9 @@ pub struct BuildPlan {
     #[serde(default)]
     pub language: Option<String>,
     /// Library search directories, passed as `-y <dir>` to verilator.
+    /// Resolved to absolute paths relative to the project root.
     #[serde(default)]
-    pub libraries: Vec<String>,
+    pub libraries: Vec<PathBuf>,
     /// Translated lint flags: `-Wno-NAME`, `-Wwarn-NAME`, `-Werror-NAME`.
     /// Derived from `[lint.verilator]` in the manifest.
     #[serde(default)]
@@ -99,7 +100,12 @@ impl BuildPlan {
             trace,
             timescale: resolved.design.timescale.clone(),
             language,
-            libraries: resolved.design.libraries.clone(),
+            libraries: resolved
+                .design
+                .libraries
+                .iter()
+                .map(|s| source_set.project_root.join(s))
+                .collect(),
             verilator_lint_flags: build_verilator_lint_flags(&resolved.lint),
             extra_verilator_args: resolved.tool_verilator.extra_args.clone(),
         }
@@ -192,7 +198,7 @@ mod tests {
         let plan = BuildPlan::new(&m, &set, Profile::Debug);
         assert_eq!(plan.timescale.as_deref(), Some("1ns/1ps"));
         assert_eq!(plan.language.as_deref(), Some("1800-2017"));
-        assert_eq!(plan.libraries, vec!["vendor/lib".to_string()]);
+        assert_eq!(plan.libraries, vec![PathBuf::from("/proj/vendor/lib")]);
     }
 
     #[test]

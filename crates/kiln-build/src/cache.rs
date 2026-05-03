@@ -38,7 +38,7 @@ impl BuildCacheKey {
         }
         for lib in &plan.libraries {
             hasher.update(b"lib=");
-            hasher.update(lib.as_bytes());
+            hasher.update(lib.to_string_lossy().as_bytes());
             hasher.update(b"\0");
         }
         for flag in &plan.verilator_lint_flags {
