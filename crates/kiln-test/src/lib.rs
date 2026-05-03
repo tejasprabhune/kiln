@@ -200,10 +200,23 @@ pub fn run_one_with_options(
         None
     };
 
-    if verbose {
-        run_streaming(&binary, wave_dir.as_deref(), &test.name, start)
+    // Resolve the simulation working directory. `wave_dir` wins when tracing
+    // (the binary must write its dump there); otherwise use `test.working_dir`
+    // from the manifest (resolved relative to the project root) if set.
+    let resolved_cwd = if trace {
+        wave_dir.clone()
     } else {
-        run_buffered(&binary, wave_dir.as_deref(), &test.name, start)
+        manifest
+            .test
+            .working_dir
+            .as_ref()
+            .map(|d| project_root.join(d))
+    };
+
+    if verbose {
+        run_streaming(&binary, resolved_cwd.as_deref(), &test.name, start)
+    } else {
+        run_buffered(&binary, resolved_cwd.as_deref(), &test.name, start)
     }
 }
 

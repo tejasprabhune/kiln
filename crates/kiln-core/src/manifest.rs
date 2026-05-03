@@ -68,6 +68,26 @@ pub struct Manifest {
     pub profile: BTreeMap<String, ProfileOverride>,
     #[serde(default)]
     pub wave: WaveConfig,
+    #[serde(default)]
+    pub test: TestConfig,
+}
+
+/// `[test]` table — options that apply when running testbenches.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct TestConfig {
+    /// Working directory for simulation binaries, relative to the project
+    /// root. Defaults to the project root when not set.
+    ///
+    /// Set this when your testbenches use relative paths (e.g. `$readmemh`)
+    /// that are relative to the testbench source file rather than to the
+    /// project root.
+    ///
+    /// Example: `working_dir = "hardware/sim"` for a project whose
+    /// testbenches live in `hardware/sim/` and reference files with
+    /// `../../software/...` paths.
+    #[serde(default)]
+    pub working_dir: Option<PathBuf>,
 }
 
 /// `[package]` table.
