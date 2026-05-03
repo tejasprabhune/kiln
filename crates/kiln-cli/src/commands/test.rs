@@ -107,10 +107,14 @@ pub fn run(
                 if !t.passed {
                     failed += 1;
                     if !t.stdout.is_empty() {
-                        println!("  stdout: {}", t.stdout.lines().last().unwrap_or(""));
+                        for line in t.stdout.lines() {
+                            println!("  {line}");
+                        }
                     }
                     if !t.stderr.is_empty() {
-                        println!("  stderr: {}", t.stderr.lines().last().unwrap_or(""));
+                        for line in t.stderr.lines() {
+                            eprintln!("  {line}");
+                        }
                     }
                     if !no_fail_fast {
                         stopped_early = true;
