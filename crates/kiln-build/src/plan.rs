@@ -39,6 +39,15 @@ pub struct BuildPlan {
     /// gate the dump on `\`ifdef KILN_TRACE`.
     #[serde(default)]
     pub trace: bool,
+    /// Passed as `--timescale` to verilator.
+    #[serde(default)]
+    pub timescale: Option<String>,
+    /// Passed as `--default-language` to verilator.
+    #[serde(default)]
+    pub language: Option<String>,
+    /// Library search directories, passed as `-y <dir>` to verilator.
+    #[serde(default)]
+    pub libraries: Vec<String>,
     /// Extra flags forwarded verbatim to verilator.
     #[serde(default)]
     pub extra_verilator_args: Vec<String>,
@@ -56,11 +65,21 @@ impl BuildPlan {
         source_set: &SourceSet,
         profile: Profile,
     ) -> Self {
-        use kiln_core::TraceFormat;
+        use kiln_core::{SvLanguage, TraceFormat};
         let trace = matches!(
             resolved.tool_verilator.trace,
             TraceFormat::Vcd | TraceFormat::Fst
         );
+        let language = resolved.design.language.map(|lang| {
+            match lang {
+                SvLanguage::Sv2005 => "1364-2005",
+                SvLanguage::Sv2009 => "1800-2009",
+                SvLanguage::Sv2012 => "1800-2012",
+                SvLanguage::Sv2017 => "1800-2017",
+                SvLanguage::Sv2023 => "1800-2023",
+            }
+            .to_string()
+        });
         Self {
             project_root: source_set.project_root.clone(),
             top: resolved.design.top.clone(),
@@ -74,6 +93,9 @@ impl BuildPlan {
             defines: resolved.design.defines.clone(),
             profile,
             trace,
+            timescale: resolved.design.timescale.clone(),
+            language,
+            libraries: resolved.design.libraries.clone(),
             extra_verilator_args: resolved.tool_verilator.extra_args.clone(),
         }
     }
@@ -123,5 +145,64 @@ mod tests {
     fn profile_as_str() {
         assert_eq!(Profile::Debug.as_str(), "debug");
         assert_eq!(Profile::Release.as_str(), "release");
+    }
+
+    #[test]
+    fn plan_carries_timescale_language_libraries() {
+        let m: Manifest = r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "top"
+            timescale = "1ns/1ps"
+            language = "sv2017"
+            libraries = ["vendor/lib"]
+        "#
+        .parse()
+        .unwrap();
+        let set = SourceSet {
+            project_root: PathBuf::from("/proj"),
+            files: vec![],
+        };
+        let plan = BuildPlan::new(&m, &set, Profile::Debug);
+        assert_eq!(plan.timescale.as_deref(), Some("1ns/1ps"));
+        assert_eq!(plan.language.as_deref(), Some("1800-2017"));
+        assert_eq!(plan.libraries, vec!["vendor/lib".to_string()]);
+    }
+
+    #[test]
+    fn plan_language_maps_all_standards() {
+        let cases = [
+            ("sv2005", "1364-2005"),
+            ("sv2009", "1800-2009"),
+            ("sv2012", "1800-2012"),
+            ("sv2017", "1800-2017"),
+            ("sv2023", "1800-2023"),
+        ];
+        for (toml_val, expected_flag) in cases {
+            let src = format!(
+                r#"
+                [package]
+                name = "p"
+                version = "0.1.0"
+                [design]
+                top = "t"
+                language = "{toml_val}"
+                "#
+            );
+            let m: Manifest = src.parse().unwrap();
+            let set = SourceSet {
+                project_root: PathBuf::from("/p"),
+                files: vec![],
+            };
+            let plan = BuildPlan::new(&m, &set, Profile::Debug);
+            assert_eq!(
+                plan.language.as_deref(),
+                Some(expected_flag),
+                "language = {toml_val}"
+            );
+        }
     }
 }

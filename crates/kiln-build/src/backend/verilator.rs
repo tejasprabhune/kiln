@@ -94,6 +94,15 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
     if plan.trace {
         cmd.arg("--trace").arg("--trace-fst");
     }
+    if let Some(ts) = &plan.timescale {
+        cmd.arg("--timescale").arg(ts);
+    }
+    if let Some(lang) = &plan.language {
+        cmd.arg("--default-language").arg(lang);
+    }
+    for lib in &plan.libraries {
+        cmd.arg("-y").arg(lib);
+    }
     for inc in &plan.include_dirs {
         cmd.arg("-I").arg(inc);
     }

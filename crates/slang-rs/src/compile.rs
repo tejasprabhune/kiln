@@ -49,6 +49,16 @@ impl CompileRequest {
     pub fn builder() -> CompileRequestBuilder {
         CompileRequestBuilder::new()
     }
+
+    /// The extra args that will be appended verbatim to the slang invocation.
+    pub fn extra_args(&self) -> &[String] {
+        &self.extra_args
+    }
+
+    /// The top module name, if set.
+    pub fn top(&self) -> Option<&str> {
+        self.top.as_deref()
+    }
 }
 
 /// Builder for [`CompileRequest`].

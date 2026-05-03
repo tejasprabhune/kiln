@@ -26,6 +26,21 @@ impl BuildCacheKey {
         hasher.update(plan.top.as_bytes());
         hasher.update(plan.profile.as_str().as_bytes());
         hasher.update(if plan.trace { b"trace=1" } else { b"trace=0" });
+        if let Some(ts) = &plan.timescale {
+            hasher.update(b"timescale=");
+            hasher.update(ts.as_bytes());
+            hasher.update(b"\0");
+        }
+        if let Some(lang) = &plan.language {
+            hasher.update(b"language=");
+            hasher.update(lang.as_bytes());
+            hasher.update(b"\0");
+        }
+        for lib in &plan.libraries {
+            hasher.update(b"lib=");
+            hasher.update(lib.as_bytes());
+            hasher.update(b"\0");
+        }
 
         let mut sorted_defines: Vec<_> = plan.defines.iter().collect();
         sorted_defines.sort();
@@ -87,6 +102,9 @@ mod tests {
             defines: BTreeMap::new(),
             profile,
             trace: false,
+            timescale: None,
+            language: None,
+            libraries: vec![],
             extra_verilator_args: vec![],
         }
     }

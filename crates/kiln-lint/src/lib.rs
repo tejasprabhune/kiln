@@ -25,6 +25,20 @@ pub fn check(
     resolved: &ResolvedConfig,
     source_set: &SourceSet,
 ) -> Result<Vec<BuildDiagnostic>, LintError> {
+    let req = build_request(resolved, source_set);
+    let result = slang.compile(&req)?;
+    let diagnostics = result
+        .diagnostics
+        .into_iter()
+        .filter_map(|d| convert(d, &resolved.lint.rules))
+        .collect();
+    Ok(diagnostics)
+}
+
+/// Build the slang CompileRequest for a resolved config. Extracted for testing.
+pub(crate) fn build_request(resolved: &ResolvedConfig, source_set: &SourceSet) -> CompileRequest {
+    use kiln_core::SvLanguage;
+
     let mut req = CompileRequest::builder().top(&resolved.design.top);
     for s in source_set.files() {
         req = req.source(s.clone());
@@ -35,8 +49,26 @@ pub fn check(
     for (k, v) in &resolved.design.defines {
         req = req.define(k.clone(), v.clone());
     }
-    // Enable every `-W` knob the user asked us to surface; that keeps the
-    // override map a no-op for things slang would otherwise silently drop.
+    if let Some(ts) = &resolved.design.timescale {
+        req = req.extra_arg("--timescale".to_string());
+        req = req.extra_arg(ts.clone());
+    }
+    if let Some(lang) = resolved.design.language {
+        let flag = match lang {
+            SvLanguage::Sv2005 => "1364-2005",
+            SvLanguage::Sv2009 => "1800-2009",
+            SvLanguage::Sv2012 => "1800-2012",
+            SvLanguage::Sv2017 => "1800-2017",
+            SvLanguage::Sv2023 => "1800-2023",
+        };
+        req = req.extra_arg("--std".to_string());
+        req = req.extra_arg(flag.to_string());
+    }
+    for lib in &resolved.design.libraries {
+        req = req.extra_arg("-y".to_string());
+        req = req.extra_arg(lib.clone());
+    }
+    // Enable every `-W` knob the user asked us to surface.
     for (id, sev) in &resolved.lint.rules {
         if matches!(sev, LintSeverity::Error | LintSeverity::Warn) {
             req = req.extra_arg(format!("-W{id}"));
@@ -47,16 +79,8 @@ pub fn check(
     }
     // We do *not* pass `--parse-only` here. Slang skips writing the
     // `--diag-json` file when parse-only is set, and we want full
-    // elaboration anyway so semantic warnings (width-trunc, etc.) fire.
-    let req = req.build();
-
-    let result = slang.compile(&req)?;
-    let diagnostics = result
-        .diagnostics
-        .into_iter()
-        .filter_map(|d| convert(d, &resolved.lint.rules))
-        .collect();
-    Ok(diagnostics)
+    // elaboration anyway so semantic warnings fire.
+    req.build()
 }
 
 fn convert(
@@ -171,5 +195,103 @@ mod tests {
         assert_eq!(m.lint.rules.len(), 3);
         assert_eq!(m.lint.rules.get("width-trunc"), Some(&LintSeverity::Error));
         assert_eq!(m.lint.rules.get("implicit-net"), Some(&LintSeverity::Off));
+    }
+
+    fn resolved(manifest_str: &str) -> (kiln_core::ResolvedConfig, kiln_build::SourceSet) {
+        let m: kiln_core::Manifest = manifest_str.parse().unwrap();
+        let resolved = kiln_core::ResolvedConfig::resolve(&m, "dev");
+        let ss = kiln_build::SourceSet {
+            project_root: std::path::PathBuf::from("/p"),
+            files: vec![],
+        };
+        (resolved, ss)
+    }
+
+    #[test]
+    fn timescale_in_design_reaches_slang_args() {
+        let (r, ss) = resolved(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            timescale = "1ns/1ps"
+            "#,
+        );
+        let req = build_request(&r, &ss);
+        let args = req.extra_args();
+        let pos = args.iter().position(|a| a == "--timescale");
+        assert!(
+            pos.is_some(),
+            "--timescale not found in slang args: {args:?}"
+        );
+        assert_eq!(args[pos.unwrap() + 1], "1ns/1ps");
+    }
+
+    #[test]
+    fn language_in_design_reaches_slang_std_arg() {
+        let (r, ss) = resolved(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            language = "sv2017"
+            "#,
+        );
+        let req = build_request(&r, &ss);
+        let args = req.extra_args();
+        let pos = args.iter().position(|a| a == "--std");
+        assert!(pos.is_some(), "--std not found in slang args: {args:?}");
+        assert_eq!(args[pos.unwrap() + 1], "1800-2017");
+    }
+
+    #[test]
+    fn libraries_in_design_reach_slang_y_flag() {
+        let (r, ss) = resolved(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            libraries = ["vendor/lib"]
+            "#,
+        );
+        let req = build_request(&r, &ss);
+        let args = req.extra_args();
+        let pos = args.iter().position(|a| a == "-y");
+        assert!(pos.is_some(), "-y not found in slang args: {args:?}");
+        assert_eq!(args[pos.unwrap() + 1], "vendor/lib");
+    }
+
+    #[test]
+    fn tool_slang_extra_args_appended_last() {
+        let (r, ss) = resolved(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            timescale = "1ns/1ps"
+            [tool.slang]
+            extra_args = ["--allow-hierarchical-const"]
+            "#,
+        );
+        let req = build_request(&r, &ss);
+        let args = req.extra_args();
+        // extra_args must come after timescale so users can override
+        let ts_pos = args.iter().position(|a| a == "--timescale").unwrap();
+        let extra_pos = args
+            .iter()
+            .position(|a| a == "--allow-hierarchical-const")
+            .unwrap();
+        assert!(
+            extra_pos > ts_pos,
+            "extra_args should come after design args"
+        );
     }
 }

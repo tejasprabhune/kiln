@@ -83,9 +83,35 @@ pub fn extract(
 
     // AST pass: best-effort sanity check + future home for cross-references.
     let req = {
-        let mut b = CompileRequest::builder();
+        use kiln_core::SvLanguage;
+        let mut b = CompileRequest::builder().top(&manifest.design.top);
         for f in source_set.files() {
             b = b.source(f.clone());
+        }
+        for d in &manifest.design.include_dirs {
+            b = b.include_dir(source_set.project_root.join(d));
+        }
+        for (k, v) in &manifest.design.defines {
+            b = b.define(k.clone(), v.clone());
+        }
+        if let Some(ts) = &manifest.design.timescale {
+            b = b.extra_arg("--timescale".to_string());
+            b = b.extra_arg(ts.clone());
+        }
+        if let Some(lang) = manifest.design.language {
+            let flag = match lang {
+                SvLanguage::Sv2005 => "1364-2005",
+                SvLanguage::Sv2009 => "1800-2009",
+                SvLanguage::Sv2012 => "1800-2012",
+                SvLanguage::Sv2017 => "1800-2017",
+                SvLanguage::Sv2023 => "1800-2023",
+            };
+            b = b.extra_arg("--std".to_string());
+            b = b.extra_arg(flag.to_string());
+        }
+        for lib in &manifest.design.libraries {
+            b = b.extra_arg("-y".to_string());
+            b = b.extra_arg(lib.clone());
         }
         for arg in manifest
             .tool
