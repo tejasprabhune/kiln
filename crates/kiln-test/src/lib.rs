@@ -365,7 +365,29 @@ pub fn run_many_with_options(
     trace: bool,
     verbose: bool,
 ) -> Vec<Result<TestOutcome, TestError>> {
+    use std::collections::HashSet;
     use std::sync::{Arc, Mutex};
+
+    // Pre-compile each unique testbench (by top name) sequentially to warm the
+    // cache before parallel workers start. Without this, N workers that share
+    // a testbench all try to compile it simultaneously and stomp on each other.
+    {
+        let mut seen: HashSet<String> = HashSet::new();
+        for test in tests {
+            if seen.insert(test.top.clone()) {
+                let mut files = source_set.files.clone();
+                let canon = test.source.canonicalize().unwrap_or(test.source.clone());
+                if !files.contains(&canon) {
+                    files.push(canon);
+                }
+                let ss = SourceSet { project_root: source_set.project_root.clone(), files };
+                let mut mft = manifest.clone();
+                mft.design.top = test.top.clone();
+                let plan = BuildPlan::new(&mft, &ss, Profile::Debug).with_trace(trace);
+                let _ = verilator::compile(&plan);
+            }
+        }
+    }
 
     let next = Arc::new(Mutex::new(0usize));
     let results: Arc<Mutex<Vec<Option<Result<TestOutcome, TestError>>>>> =
