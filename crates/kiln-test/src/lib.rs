@@ -351,11 +351,13 @@ fn format_diagnostics(diags: &[kiln_build::BuildDiagnostic]) -> String {
     use std::fmt::Write as _;
     let mut s = String::new();
     for d in diags {
-        let _ = writeln!(
-            s,
-            "{:?}: {} at {:?}:{:?}:{:?}",
-            d.severity, d.message, d.file, d.line, d.column
-        );
+        let loc = match (&d.file, d.line, d.column) {
+            (Some(f), Some(l), Some(c)) => format!(" at {}:{l}:{c}", f.display()),
+            (Some(f), Some(l), None) => format!(" at {}:{l}", f.display()),
+            (Some(f), None, _) => format!(" at {}", f.display()),
+            _ => String::new(),
+        };
+        let _ = writeln!(s, "{:?}: {}{loc}", d.severity, d.message);
     }
     s
 }
