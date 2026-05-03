@@ -22,6 +22,7 @@ pub mod backend;
 pub mod cache;
 pub mod diagnostic;
 pub mod plan;
+pub mod render;
 pub mod source_set;
 
 pub use backend::BackendError;
