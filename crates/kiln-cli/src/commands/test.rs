@@ -15,6 +15,7 @@ pub fn run(
     jobs: Option<usize>,
     no_fail_fast: bool,
     list: bool,
+    verbose: bool,
     trace: bool,
     _profile: &str,
 ) -> Result<()> {
@@ -65,6 +66,9 @@ pub fn run(
             .map(|n| n.get())
             .unwrap_or(1)
     });
+    if verbose && jobs > 1 {
+        anyhow::bail!("--verbose requires --jobs 1 (streaming output from parallel tests would interleave)");
+    }
     let trace_effective = trace || manifest.wave.enabled_by_default;
 
     let started = Instant::now();
@@ -89,6 +93,7 @@ pub fn run(
         &tests,
         jobs,
         trace_effective,
+        verbose,
     );
 
     let mut passed = 0usize;
@@ -106,14 +111,17 @@ pub fn run(
                 println!("test {} ... {label} ({elapsed})", t.name);
                 if !t.passed {
                     failed += 1;
-                    if !t.stdout.is_empty() {
-                        for line in t.stdout.lines() {
-                            println!("  {line}");
+                    // In verbose mode output was already streamed; skip reprinting.
+                    if !verbose {
+                        if !t.stdout.is_empty() {
+                            for line in t.stdout.lines() {
+                                println!("  {line}");
+                            }
                         }
-                    }
-                    if !t.stderr.is_empty() {
-                        for line in t.stderr.lines() {
-                            eprintln!("  {line}");
+                        if !t.stderr.is_empty() {
+                            for line in t.stderr.lines() {
+                                eprintln!("  {line}");
+                            }
                         }
                     }
                     if !no_fail_fast {

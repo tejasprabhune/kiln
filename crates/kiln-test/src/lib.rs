@@ -17,8 +17,9 @@
 //! beyond M5: it requires a Python runtime and cocotb installed system-
 //! wide, which we don't want to pin into CI without a clear ADR.
 
+use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
@@ -134,16 +135,24 @@ pub fn run_one(
     base_source_set: &SourceSet,
     test: &DiscoveredTest,
 ) -> Result<TestOutcome, TestError> {
-    run_one_with_options(project_root, manifest, base_source_set, test, false)
+    run_one_with_options(project_root, manifest, base_source_set, test, false, false)
 }
 
 /// Build and run one test with explicit options.
+///
+/// When `verbose` is true, stdout and stderr from the simulation binary are
+/// streamed to the terminal in real time. The returned `TestOutcome` will have
+/// empty `stdout`/`stderr` fields in that case — the output was already
+/// printed. `verbose` must not be used with `jobs > 1` since the streams from
+/// concurrent tests would interleave; the caller is responsible for enforcing
+/// this.
 pub fn run_one_with_options(
     project_root: &Path,
     manifest: &Manifest,
     base_source_set: &SourceSet,
     test: &DiscoveredTest,
     trace: bool,
+    verbose: bool,
 ) -> Result<TestOutcome, TestError> {
     let start = Instant::now();
 
@@ -180,31 +189,97 @@ pub fn run_one_with_options(
 
     // When tracing, run the binary in `<project>/target/kiln/waves/`
     // so its `$dumpfile("<top>.fst")` lands in the right place.
-    let mut cmd = Command::new(&binary);
-    if trace {
+    let wave_dir = if trace {
         let dir = project_root.join("target").join("kiln").join("waves");
         std::fs::create_dir_all(&dir).map_err(|source| TestError::Io {
             path: dir.clone(),
             source,
         })?;
-        cmd.current_dir(&dir);
+        Some(dir)
     } else {
-        let _ = project_root;
+        None
+    };
+
+    if verbose {
+        run_streaming(&binary, wave_dir.as_deref(), &test.name, start)
+    } else {
+        run_buffered(&binary, wave_dir.as_deref(), &test.name, start)
     }
-    let output = cmd.output().map_err(|source| TestError::Io {
-        path: binary.clone(),
-        source,
-    })?;
+}
+
+fn make_cmd(binary: &Path, cwd: Option<&Path>) -> Command {
+    let mut cmd = Command::new(binary);
+    if let Some(dir) = cwd {
+        cmd.current_dir(dir);
+    }
+    cmd
+}
+
+/// Capture all output, then return it in the outcome.
+fn run_buffered(
+    binary: &Path,
+    cwd: Option<&Path>,
+    name: &str,
+    start: Instant,
+) -> Result<TestOutcome, TestError> {
+    let output = make_cmd(binary, cwd)
+        .output()
+        .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     let passed = output.status.success() && stdout.contains("PASS");
+    Ok(TestOutcome { name: name.to_string(), passed, elapsed: start.elapsed(), stdout, stderr })
+}
+
+/// Stream stdout and stderr to the terminal line by line as the simulation
+/// runs. The returned outcome has empty stdout/stderr — output was already
+/// printed. Uses a background thread for stderr so both streams drain
+/// concurrently without deadlocking.
+fn run_streaming(
+    binary: &Path,
+    cwd: Option<&Path>,
+    name: &str,
+    start: Instant,
+) -> Result<TestOutcome, TestError> {
+    let mut child = make_cmd(binary, cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
+
+    let stderr_pipe = child.stderr.take().expect("stderr piped");
+    let stderr_thread = std::thread::spawn(move || {
+        let reader = BufReader::new(stderr_pipe);
+        for line in reader.lines().map_while(Result::ok) {
+            eprintln!("{line}");
+        }
+    });
+
+    // stdout_contains_pass tracks whether "PASS" appeared anywhere so we
+    // can determine pass/fail after streaming finishes.
+    let mut stdout_has_pass = false;
+    if let Some(stdout_pipe) = child.stdout.take() {
+        let reader = BufReader::new(stdout_pipe);
+        for line in reader.lines().map_while(Result::ok) {
+            if line.contains("PASS") {
+                stdout_has_pass = true;
+            }
+            println!("{line}");
+        }
+    }
+
+    let _ = stderr_thread.join();
+    let status = child
+        .wait()
+        .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
+    let passed = status.success() && stdout_has_pass;
 
     Ok(TestOutcome {
-        name: test.name.clone(),
+        name: name.to_string(),
         passed,
         elapsed: start.elapsed(),
-        stdout,
-        stderr,
+        stdout: String::new(),
+        stderr: String::new(),
     })
 }
 
@@ -216,11 +291,12 @@ pub fn run_many(
     tests: &[DiscoveredTest],
     jobs: usize,
 ) -> Vec<Result<TestOutcome, TestError>> {
-    run_many_with_options(project_root, manifest, source_set, tests, jobs, false)
+    run_many_with_options(project_root, manifest, source_set, tests, jobs, false, false)
 }
 
-/// Run a slice of tests in parallel, with `trace` propagated to each
-/// per-test build/run. Order of returned outcomes matches `tests`.
+/// Run a slice of tests in parallel, with `trace` and `verbose` propagated to
+/// each per-test build/run. Order of returned outcomes matches `tests`.
+/// `verbose` must only be used with `jobs == 1`.
 pub fn run_many_with_options(
     project_root: &Path,
     manifest: &Manifest,
@@ -228,6 +304,7 @@ pub fn run_many_with_options(
     tests: &[DiscoveredTest],
     jobs: usize,
     trace: bool,
+    verbose: bool,
 ) -> Vec<Result<TestOutcome, TestError>> {
     use std::sync::{Arc, Mutex};
 
@@ -250,8 +327,14 @@ pub fn run_many_with_options(
                     *g += 1;
                     i
                 };
-                let r =
-                    run_one_with_options(project_root, manifest, source_set, &tests[idx], trace);
+                let r = run_one_with_options(
+                    project_root,
+                    manifest,
+                    source_set,
+                    &tests[idx],
+                    trace,
+                    verbose,
+                );
                 let mut g = results.lock().unwrap();
                 g[idx] = Some(r);
             });

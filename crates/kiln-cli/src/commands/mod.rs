@@ -156,6 +156,9 @@ enum Command {
         /// Print discovered tests, do not run.
         #[arg(long)]
         list: bool,
+        /// Stream simulation output to the terminal in real time. Requires --jobs 1.
+        #[arg(short, long)]
+        verbose: bool,
         /// Build with FST trace support and dump waves to target/kiln/waves/.
         #[arg(long)]
         trace: bool,
@@ -291,9 +294,10 @@ impl Cli {
                 jobs,
                 no_fail_fast,
                 list,
+                verbose,
                 trace,
                 profile,
-            } => test::run(filter, jobs, no_fail_fast, list, trace, &profile),
+            } => test::run(filter, jobs, no_fail_fast, list, verbose, trace, &profile),
             Command::Doc { open, profile } => doc::run(open, &profile),
             Command::Lint { subcommand } => match subcommand {
                 LintSubcommand::List => lint::run_list(),
