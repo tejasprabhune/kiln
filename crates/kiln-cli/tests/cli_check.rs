@@ -80,12 +80,12 @@ fn check_fails_on_lint_demo_with_promoted_width_trunc() {
 
 #[test]
 fn lint_allow_suppresses_warning() {
-    // Edit lint-demo's Kiln.toml to set width-trunc = "allow" and verify
+    // Edit lint-demo's Kiln.toml to set width-trunc = "off" and verify
     // `kiln check` is clean.
     let tmp = copy_example("lint-demo");
     let manifest = tmp.path().join("Kiln.toml");
     let original = std::fs::read_to_string(&manifest).unwrap();
-    let edited = original.replace(r#"width-trunc = "error""#, r#"width-trunc = "allow""#);
+    let edited = original.replace(r#"width-trunc = "error""#, r#"width-trunc = "off""#);
     std::fs::write(&manifest, edited).unwrap();
     kiln()
         .arg("check")

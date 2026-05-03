@@ -133,6 +133,18 @@
         <td><span class="default"><code>["src/**/*.sv", "src/**/*.svh", "src/**/*.v"]</code></span></td>
       </tr>
       <tr>
+        <td><code>timescale</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>string</td>
+        <td><span class="default">none</span></td>
+      </tr>
+      <tr>
+        <td><code>language</code></td>
+        <td><span class="opt">optional</span></td>
+        <td><code>"sv2005"</code> | <code>"sv2009"</code> | <code>"sv2012"</code> | <code>"sv2017"</code> | <code>"sv2023"</code></td>
+        <td><span class="default">tool default</span></td>
+      </tr>
+      <tr>
         <td><code>include_dirs</code></td>
         <td><span class="opt">optional</span></td>
         <td>list of paths</td>
@@ -145,33 +157,32 @@
         <td><span class="default"><code>{}</code></span></td>
       </tr>
       <tr>
-        <td><code>slang_args</code></td>
+        <td><code>libraries</code></td>
         <td><span class="opt">optional</span></td>
         <td>list of strings</td>
         <td><span class="default"><code>[]</code></span></td>
       </tr>
+      <tr>
+        <td><code>test_sources</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of glob strings</td>
+        <td><span class="default"><code>[]</code> (falls back to <code>tests/*.sv</code>)</span></td>
+      </tr>
     </tbody>
   </table>
   <p>
-    <code>slang_args</code> passes arguments verbatim to slang after all
-    kiln-managed flags. Use it for flags kiln does not expose directly.
-    The most common use is supplying a default timescale for designs that mix
-    files with and without <code>`timescale</code> directives (a hard error in slang
-    that <code>[lint]</code> cannot suppress):
+    <code>timescale</code> passes <code>--timescale 1ns/1ps</code> to both slang and verilator —
+    useful for designs that mix files with and without <code>`timescale</code> directives.
+    <code>language</code> maps to <code>--std</code> (slang) and <code>--default-language</code> (verilator).
+    <code>defines</code> entries with an empty string become <code>+define+FOO</code>;
+    non-empty values become <code>+define+FOO=bar</code>.
+    <code>include_dirs</code> entries must exist on disk when loading an existing project.
   </p>
   <pre><code>[design]
-top       = "my_top"
-slang_args = ["--timescale", "1ns/1ps"]</code></pre>
-  <p>
-    Globs are evaluated relative to the directory containing <code>Kiln.toml</code>.
-    <code>include_dirs</code> entries must exist on disk when the manifest is loaded
-    (the check is skipped during <code>kiln new</code>).
-    <code>defines</code> entries with an empty string value become valueless
-    <code>+define+FOO</code> flags; non-empty values become <code>+define+FOO=bar</code>.
-  </p>
-  <pre><code>[design]
-top          = "my_top"
-sources      = ["rtl/**/*.sv", "rtl/**/*.v", "ip/**/*.sv"]
+top          = "soc_top"
+sources      = ["rtl/**/*.sv", "ip/**/*.sv"]
+timescale    = "1ns/1ps"
+language     = "sv2017"
 include_dirs = ["rtl/include", "ip/include"]
 defines      = { SIMULATION = "", WIDTH = "8" }</code></pre>
 
@@ -195,53 +206,163 @@ local_ip = { path = "../local_ip" }</code></pre>
   <!-- [lint] -->
   <h2><code>[lint]</code></h2>
   <p>
-    Per-diagnostic severity overrides. Keys are slang's diagnostic option names
-    (the same strings passed to <code>-W&lt;name&gt;</code> on the slang CLI).
-    Values are <code>"error"</code>, <code>"warn"</code>, or <code>"allow"</code>.
+    The lint table has three layers. <strong>Canonical rules</strong> (top-level keys) are
+    kiln-defined names that map to equivalents in both slang and verilator.
+    <strong><code>[lint.slang]</code></strong> and <strong><code>[lint.verilator]</code></strong>
+    accept tool-native names and overlay on top of the canonical rules, winning on conflict.
   </p>
+  <p>Severity values: <code>"error"</code>, <code>"warn"</code>, <code>"off"</code>, <code>"deny"</code>.</p>
   <pre><code>[lint]
-no-timescale-unit    = "allow"   <span class="comment"># suppress missing-timescale warnings</span>
-width-trunc          = "error"   <span class="comment"># promote truncation warnings to errors</span>
-unused-net           = "warn"
-implicit-net         = "allow"</code></pre>
+width-trunc     = "error"   <span class="comment"># promote truncation warnings to errors</span>
+case-incomplete = "warn"
+unused          = "warn"
 
-  <h3>Common diagnostic names</h3>
+[lint.slang]
+relax-enum-conversions = "off"   <span class="comment"># slang-only option</span>
+
+[lint.verilator]
+GENUNNAMED   = "warn"   <span class="comment"># verilator-only warning code</span>
+DECLFILENAME = "off"</code></pre>
+  <p>
+    If you're unsure of the name for a specific warning, <code>kiln check</code>
+    prints it in brackets after the message — e.g. <code>warning: ... [width-trunc]</code>.
+    Run <code>kiln lint list</code> to see all known canonical rules and
+    <code>kiln lint explain &lt;name&gt;</code> for a description.
+  </p>
+
+  <h3>Canonical lint rules</h3>
   <table class="field-table">
     <thead>
       <tr><th>Name</th><th>Default</th><th>What it covers</th></tr>
     </thead>
     <tbody>
-      <tr><td><code>no-timescale-unit</code></td><td>warn</td><td>A design element lacks a <code>`timescale</code> directive while others in the design have one. Suppress this if your simulator sets a default timescale.</td></tr>
       <tr><td><code>width-trunc</code></td><td>warn</td><td>Implicit truncation when assigning a wider value to a narrower type.</td></tr>
-      <tr><td><code>width-expand</code></td><td>warn</td><td>Implicit zero- or sign-extension when assigning to a wider type.</td></tr>
-      <tr><td><code>implicit-net</code></td><td>warn</td><td>Net used without an explicit declaration (relies on implicit-wire rules).</td></tr>
-      <tr><td><code>unused-net</code></td><td>warn</td><td>Net declared but never driven or read.</td></tr>
-      <tr><td><code>unused-variable</code></td><td>warn</td><td>Variable declared but never written or read.</td></tr>
-      <tr><td><code>unused-import</code></td><td>warn</td><td>Package imported with <code>import pkg::*</code> but nothing from it is used.</td></tr>
-      <tr><td><code>unused-typedef</code></td><td>warn</td><td>Typedef declared but never referenced.</td></tr>
-      <tr><td><code>unused-param</code></td><td>warn</td><td>Parameter declared but never referenced.</td></tr>
-      <tr><td><code>always-comb-blocking</code></td><td>warn</td><td>Blocking assignment (<code>=</code>) inside <code>always_comb</code>.</td></tr>
-      <tr><td><code>always-ff-blocking</code></td><td>warn</td><td>Blocking assignment (<code>=</code>) inside <code>always_ff</code>.</td></tr>
-      <tr><td><code>case-incomplete</code></td><td>warn</td><td><code>case</code> statement does not cover all possible values and has no <code>default</code>.</td></tr>
-      <tr><td><code>cast-truncates</code></td><td>warn</td><td>Explicit cast that results in truncation.</td></tr>
-      <tr><td><code>sign-compare</code></td><td>warn</td><td>Comparison between signed and unsigned values.</td></tr>
-      <tr><td><code>empty-body</code></td><td>warn</td><td>Empty body in an <code>if</code>, <code>while</code>, or similar construct.</td></tr>
+      <tr><td><code>case-incomplete</code></td><td>warn</td><td><code>case</code> statement does not cover all values and has no <code>default</code>.</td></tr>
+      <tr><td><code>unused</code></td><td>warn</td><td>Net or variable declared but never driven or read.</td></tr>
+      <tr><td><code>implicit-net</code></td><td>warn</td><td>Net used without an explicit declaration.</td></tr>
       <tr><td><code>port-coercion</code></td><td>warn</td><td>Type coercion at a port connection boundary.</td></tr>
-      <tr><td><code>unconnected-port</code></td><td>warn</td><td>Instance port left unconnected without <code>.*</code> or explicit <code>.port()</code>.</td></tr>
-      <tr><td><code>missing-port</code></td><td>error</td><td>Required port in an instance connection is missing entirely.</td></tr>
     </tbody>
   </table>
   <p>
-    Any diagnostic name accepted by <code>slang -W&lt;name&gt;</code> is valid here.
-    Run <code>slang --help-diagnostics</code> for the full list.
-    If you're unsure of the key for a specific warning, <code>kiln check</code>
-    now prints it in brackets after the message — e.g.
-    <code>warning: ... [no-timescale-unit]</code> — so you can copy it directly
-    into <code>[lint]</code>.
-    Setting a rule to <code>"error"</code> or <code>"warn"</code> also passes
-    <code>-W&lt;name&gt;</code> to slang so diagnostics slang would normally suppress
-    at the default level are surfaced. <code>"allow"</code> is post-filtering:
-    the diagnostic still reaches kiln but is dropped before rendering.
+    Rules not in this table must be specified under <code>[lint.slang]</code> or
+    <code>[lint.verilator]</code> using tool-native names.
+    For slang, any name accepted by <code>slang -W&lt;name&gt;</code> is valid;
+    run <code>slang --help-diagnostics</code> for the full list.
+  </p>
+
+  <!-- [tool.*] -->
+  <h2><code>[tool.slang]</code></h2>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>path</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>path</td>
+        <td><span class="default">found on PATH</span></td>
+      </tr>
+      <tr>
+        <td><code>extra_args</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><code>[tool.verilator]</code></h2>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>path</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>path</td>
+        <td><span class="default">found on PATH</span></td>
+      </tr>
+      <tr>
+        <td><code>threads</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>integer</td>
+        <td><span class="default">none</span></td>
+      </tr>
+      <tr>
+        <td><code>trace</code></td>
+        <td><span class="opt">optional</span></td>
+        <td><code>false</code> | <code>"vcd"</code> | <code>"fst"</code></td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+      <tr>
+        <td><code>coverage</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>bool</td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+      <tr>
+        <td><code>extra_args</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2><code>[tool.verible]</code></h2>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>path</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>path</td>
+        <td><span class="default">found on PATH</span></td>
+      </tr>
+      <tr>
+        <td><code>extra_args</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    <code>extra_args</code> is a permanent escape hatch — not a deprecation target.
+    The typed fields cover the common cases; <code>extra_args</code> handles the rest.
+    At <code>-v</code> (verbose), kiln logs the fully resolved command line for each
+    subprocess invocation so you can verify what <code>extra_args</code> produces.
+  </p>
+
+  <!-- [profile.*] -->
+  <h2><code>[profile.&lt;name&gt;]</code></h2>
+  <p>
+    Profiles override design, lint, and tool settings per build context.
+    Built-in names: <code>dev</code> (default for <code>kiln build</code>/<code>check</code>),
+    <code>release</code> (<code>--release</code> shorthand), <code>test</code> (default for <code>kiln test</code>).
+    Custom names are allowed.
+  </p>
+  <p>
+    <code>Vec</code> fields in profile overrides <em>replace</em> the base value (not append) — this
+    makes it possible to remove a flag in one profile that exists in another.
+    Map fields merge with the overlay winning on key conflicts.
+  </p>
+  <pre><code>[profile.release.tool.verilator]
+extra_args = ["-O3"]
+
+[profile.test.tool.verilator]
+trace    = "fst"
+coverage = true
+
+[profile.test.lint]
+unused = "error"</code></pre>
+  <p>
+    Select a profile with <code>--profile &lt;name&gt;</code> or <code>--release</code>.
   </p>
 
   <!-- [wave] -->
@@ -270,33 +391,51 @@ implicit-net         = "allow"</code></pre>
     behaves as if <code>--trace</code> was passed. FST is smaller and faster than VCD;
     prefer it unless your waveform viewer requires VCD.
   </p>
-  <pre><code>[wave]
-format             = "fst"
-enabled_by_default = false</code></pre>
 
   <!-- Full example -->
   <h2>Complete example</h2>
   <pre><code>[package]
-name        = "counter"
+name        = "my_soc"
 version     = "0.1.0"
-authors     = ["Tejas Prabhune &lt;prabhune@berkeley.edu&gt;"]
-description = "A parameterized up/down counter"
+authors     = ["Jane &lt;jane@example.com&gt;"]
+description = "A parameterized SoC"
 license     = "MIT OR Apache-2.0"
 
 [design]
-top          = "counter"
-sources      = ["src/**/*.sv"]
-include_dirs = ["include"]
-defines      = { SIMULATION = "" }
+top          = "soc_top"
+sources      = ["rtl/**/*.sv"]
+timescale    = "1ns/1ps"
+language     = "sv2017"
+include_dirs = ["rtl/include"]
+defines      = { SIMULATION = "", WIDTH = "8" }
 
 [dependencies]
 common_cells = { git = "https://github.com/pulp-platform/common_cells.git", version = "1.32" }
 
 [lint]
-no-timescale-unit    = "allow"
-width-trunc          = "error"
-unused-net           = "warn"
-implicit-net         = "allow"
+width-trunc     = "error"
+case-incomplete = "warn"
+
+[lint.slang]
+relax-enum-conversions = "off"
+
+[tool.slang]
+extra_args = ["--allow-hierarchical-const"]
+
+[tool.verilator]
+threads    = 4
+trace      = false
+extra_args = ["--x-assign", "0"]
+
+[profile.release.tool.verilator]
+extra_args = ["-O3"]
+
+[profile.test.tool.verilator]
+trace    = "fst"
+coverage = true
+
+[profile.test.lint]
+unused = "error"
 
 [wave]
 format             = "fst"

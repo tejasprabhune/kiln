@@ -51,7 +51,11 @@ pub struct DocSet {
 /// pass is run anyway so that future cross-references (port types,
 /// instance hierarchy) can hang off real elaborated AST data; M8's
 /// acceptance criteria don't depend on it yet.
-pub fn extract(slang: &Slang, manifest: &Manifest, source_set: &SourceSet) -> Result<DocSet, DocError> {
+pub fn extract(
+    slang: &Slang,
+    manifest: &Manifest,
+    source_set: &SourceSet,
+) -> Result<DocSet, DocError> {
     // Source pass: enumerate items + their attached docs.
     let mut items: BTreeMap<String, DocItem> = BTreeMap::new();
     for f in source_set.files() {
@@ -83,7 +87,13 @@ pub fn extract(slang: &Slang, manifest: &Manifest, source_set: &SourceSet) -> Re
         for f in source_set.files() {
             b = b.source(f.clone());
         }
-        for arg in &manifest.design.slang_args {
+        for arg in manifest
+            .tool
+            .slang
+            .as_ref()
+            .map(|s| s.extra_args.as_slice())
+            .unwrap_or(&[])
+        {
             b = b.extra_arg(arg.clone());
         }
         b.want_ast(true).build()

@@ -54,7 +54,10 @@ pub struct DiscoveredTest {
 
 /// Discover testbenches. If the manifest specifies `design.test_sources`
 /// globs, those are expanded; otherwise falls back to `tests/*.sv`.
-pub fn discover(project_root: &Path, manifest: &Manifest) -> Result<Vec<DiscoveredTest>, TestError> {
+pub fn discover(
+    project_root: &Path,
+    manifest: &Manifest,
+) -> Result<Vec<DiscoveredTest>, TestError> {
     if manifest.design.test_sources.is_empty() {
         discover_dir(&project_root.join("tests"))
     } else {
@@ -62,7 +65,9 @@ pub fn discover(project_root: &Path, manifest: &Manifest) -> Result<Vec<Discover
         for pattern in &manifest.design.test_sources {
             let full = project_root.join(pattern);
             let pattern_str = full.to_string_lossy().into_owned();
-            let Ok(paths) = glob::glob(&pattern_str) else { continue };
+            let Ok(paths) = glob::glob(&pattern_str) else {
+                continue;
+            };
             for path in paths.flatten() {
                 if path.extension().and_then(|s| s.to_str()) == Some("sv") {
                     let stem = path
@@ -276,15 +281,30 @@ fn format_diagnostics(diags: &[kiln_build::BuildDiagnostic]) -> String {
 mod tests {
     use super::*;
 
+    fn base_manifest() -> Manifest {
+        r#"
+        [package]
+        name = "demo"
+        version = "0.1.0"
+
+        [design]
+        top = "t"
+        "#
+        .parse()
+        .unwrap()
+    }
+
     #[test]
     fn discover_returns_empty_when_no_tests_dir() {
         let tmp = tempfile::tempdir().unwrap();
-        assert!(discover(tmp.path()).unwrap().is_empty());
+        let m = base_manifest();
+        assert!(discover(tmp.path(), &m).unwrap().is_empty());
     }
 
     #[test]
     fn discover_finds_sv_files_and_uses_stem_as_top() {
         let tmp = tempfile::tempdir().unwrap();
+        let m = base_manifest();
         std::fs::create_dir_all(tmp.path().join("tests")).unwrap();
         std::fs::write(tmp.path().join("tests/smoke.sv"), "module smoke; endmodule").unwrap();
         std::fs::write(
@@ -293,7 +313,7 @@ mod tests {
         )
         .unwrap();
         std::fs::write(tmp.path().join("tests/notes.txt"), "ignore me").unwrap();
-        let found = discover(tmp.path()).unwrap();
+        let found = discover(tmp.path(), &m).unwrap();
         assert_eq!(found.len(), 2);
         assert_eq!(found[0].name, "another");
         assert_eq!(found[0].top, "another");
@@ -303,11 +323,12 @@ mod tests {
     #[test]
     fn discover_alphabetically_sorted() {
         let tmp = tempfile::tempdir().unwrap();
+        let m = base_manifest();
         std::fs::create_dir_all(tmp.path().join("tests")).unwrap();
         for n in ["zeta.sv", "alpha.sv", "mu.sv"] {
             std::fs::write(tmp.path().join("tests").join(n), "").unwrap();
         }
-        let names: Vec<_> = discover(tmp.path())
+        let names: Vec<_> = discover(tmp.path(), &m)
             .unwrap()
             .into_iter()
             .map(|t| t.name)

@@ -1,6 +1,5 @@
 ---
 source: crates/kiln-core/src/manifest.rs
-assertion_line: 307
 expression: err.to_string()
 ---
 package version `not-semver` is not valid semver: unexpected character 'n' while parsing major version number

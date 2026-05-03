@@ -5,14 +5,14 @@ use std::time::Instant;
 use anyhow::{anyhow, bail, Context, Result};
 
 use kiln_build::SourceSet;
-use kiln_core::{find_manifest, Manifest};
+use kiln_core::{find_manifest, Manifest, ResolvedConfig};
 use slang_rs::Slang;
 
 use crate::commands::build::fmt_elapsed;
 use crate::render;
 use crate::reporter;
 
-pub fn run(deny_warnings: bool, verbose: bool) -> Result<()> {
+pub fn run(deny_warnings: bool, verbose: bool, profile_name: &str) -> Result<()> {
     if verbose {
         unsafe {
             std::env::set_var("KILN_LOG", "debug");
@@ -25,13 +25,14 @@ pub fn run(deny_warnings: bool, verbose: bool) -> Result<()> {
         .parent()
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
+    let resolved = ResolvedConfig::resolve(&manifest, profile_name);
     let source_set = SourceSet::resolve(&project_root, &manifest)?;
 
     reporter::status("Checking", format!("`{}` with slang", manifest.design.top));
     let started = Instant::now();
     let slang = Slang::new()?;
     reporter::debug("Using", format!("slang {}", slang.version()));
-    let diagnostics = kiln_lint::check(&slang, &manifest, &source_set)?;
+    let diagnostics = kiln_lint::check(&slang, &resolved, &source_set)?;
 
     let rendered = render::render(&diagnostics);
     if !rendered.is_empty() {

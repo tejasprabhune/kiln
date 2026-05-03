@@ -1,6 +1,5 @@
 ---
 source: crates/kiln-core/src/manifest.rs
-assertion_line: 255
 expression: m
 ---
 package:
@@ -15,11 +14,21 @@ design:
     - src/**/*.sv
     - src/**/*.svh
     - src/**/*.v
+  timescale: ~
+  language: ~
   include_dirs: []
   defines: {}
-  slang_args: []
+  libraries: []
+  test_sources: []
 dependencies: {}
-lint: {}
+lint:
+  slang: {}
+  verilator: {}
+tool:
+  slang: ~
+  verilator: ~
+  verible: ~
+profile: {}
 wave:
   format: fst
   enabled_by_default: false

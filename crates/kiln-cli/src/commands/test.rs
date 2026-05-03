@@ -16,6 +16,7 @@ pub fn run(
     no_fail_fast: bool,
     list: bool,
     trace: bool,
+    _profile: &str,
 ) -> Result<()> {
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;

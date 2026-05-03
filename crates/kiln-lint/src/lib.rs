@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use thiserror::Error;
 
 use kiln_build::{BuildDiagnostic, Severity, SourceSet};
-use kiln_core::{LintSeverity, Manifest};
+use kiln_core::{LintSeverity, ResolvedConfig};
 use slang_rs::{CompileRequest, Severity as SlangSeverity, Slang, SlangError};
 
 #[derive(Debug, Error)]
@@ -19,30 +19,30 @@ pub enum LintError {
 }
 
 /// Run a Slang elaboration over the project's source set and apply the
-/// `[lint]` severity overrides from the manifest.
+/// `[lint]` severity overrides from the resolved config.
 pub fn check(
     slang: &Slang,
-    manifest: &Manifest,
+    resolved: &ResolvedConfig,
     source_set: &SourceSet,
 ) -> Result<Vec<BuildDiagnostic>, LintError> {
-    let mut req = CompileRequest::builder().top(&manifest.design.top);
+    let mut req = CompileRequest::builder().top(&resolved.design.top);
     for s in source_set.files() {
         req = req.source(s.clone());
     }
-    for d in &manifest.design.include_dirs {
+    for d in &resolved.design.include_dirs {
         req = req.include_dir(source_set.project_root.join(d));
     }
-    for (k, v) in &manifest.design.defines {
+    for (k, v) in &resolved.design.defines {
         req = req.define(k.clone(), v.clone());
     }
     // Enable every `-W` knob the user asked us to surface; that keeps the
     // override map a no-op for things slang would otherwise silently drop.
-    for (id, sev) in &manifest.lint.rules {
+    for (id, sev) in &resolved.lint.rules {
         if matches!(sev, LintSeverity::Error | LintSeverity::Warn) {
             req = req.extra_arg(format!("-W{id}"));
         }
     }
-    for arg in &manifest.design.slang_args {
+    for arg in &resolved.tool_slang.extra_args {
         req = req.extra_arg(arg.clone());
     }
     // We do *not* pass `--parse-only` here. Slang skips writing the
@@ -54,7 +54,7 @@ pub fn check(
     let diagnostics = result
         .diagnostics
         .into_iter()
-        .filter_map(|d| convert(d, &manifest.lint.rules))
+        .filter_map(|d| convert(d, &resolved.lint.rules))
         .collect();
     Ok(diagnostics)
 }
@@ -74,7 +74,7 @@ fn convert(
             match over {
                 LintSeverity::Error => severity = Severity::Error,
                 LintSeverity::Warn => severity = Severity::Warning,
-                LintSeverity::Allow => return None,
+                LintSeverity::Off | LintSeverity::Deny => return None,
             }
         }
     }
@@ -136,9 +136,9 @@ mod tests {
     }
 
     #[test]
-    fn convert_allow_drops_diagnostic() {
+    fn convert_off_drops_diagnostic() {
         let mut rules = BTreeMap::new();
-        rules.insert("foo".to_string(), LintSeverity::Allow);
+        rules.insert("foo".to_string(), LintSeverity::Off);
         assert!(convert(diag(Some("foo"), SlangSeverity::Warning), &rules).is_none());
     }
 
@@ -152,6 +152,7 @@ mod tests {
 
     #[test]
     fn lint_config_round_trips_in_manifest() {
+        use kiln_core::Manifest;
         let m: Manifest = r#"
             [package]
             name = "p"
@@ -163,12 +164,12 @@ mod tests {
             [lint]
             width-trunc = "error"
             unused-net = "warn"
-            implicit-net = "allow"
+            implicit-net = "off"
         "#
         .parse()
         .unwrap();
         assert_eq!(m.lint.rules.len(), 3);
         assert_eq!(m.lint.rules.get("width-trunc"), Some(&LintSeverity::Error));
-        assert_eq!(m.lint.rules.get("implicit-net"), Some(&LintSeverity::Allow));
+        assert_eq!(m.lint.rules.get("implicit-net"), Some(&LintSeverity::Off));
     }
 }

@@ -20,6 +20,8 @@ semver.workspace = true
 glob.workspace = true
 walkdir.workspace = true
 tracing.workspace = true
+strsim.workspace = true
+schemars.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

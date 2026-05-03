@@ -87,6 +87,7 @@ mod tests {
             defines: BTreeMap::new(),
             profile,
             trace: false,
+            extra_verilator_args: vec![],
         }
     }
 

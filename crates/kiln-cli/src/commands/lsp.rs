@@ -367,7 +367,7 @@ mod tests {
             [lint]
             width-trunc = "error"
             unused-net = "warn"
-            implicit-net = "allow"
+            implicit-net = "off"
             "#,
         );
         let tmp = tempfile::tempdir().unwrap();

@@ -10,8 +10,10 @@ mod deps;
 mod doc;
 mod fmt;
 mod install_tools;
+mod lint;
 mod lsp;
 mod new;
+mod schema;
 mod test;
 mod wave;
 
@@ -64,13 +66,19 @@ enum Command {
         deny_warnings: bool,
         #[arg(short, long)]
         verbose: bool,
+        /// Build profile to use. Defaults to `dev`.
+        #[arg(long, default_value = "dev")]
+        profile: String,
     },
 
     /// Build the design with Verilator.
     Build {
-        /// Build with optimization (`-O3`, `--x-assign 0`).
-        #[arg(long)]
+        /// Shorthand for `--profile release`.
+        #[arg(long, conflicts_with = "profile")]
         release: bool,
+        /// Build profile to use. Defaults to `dev`.
+        #[arg(long, default_value = "dev")]
+        profile: String,
         /// Verbose tracing.
         #[arg(short, long)]
         verbose: bool,
@@ -78,8 +86,12 @@ enum Command {
 
     /// Build and run the simulator binary. Args after `--` are forwarded.
     Run {
-        #[arg(long)]
+        /// Shorthand for `--profile release`.
+        #[arg(long, conflicts_with = "profile")]
         release: bool,
+        /// Build profile to use. Defaults to `dev`.
+        #[arg(long, default_value = "dev")]
+        profile: String,
         #[arg(short, long)]
         verbose: bool,
         /// Arguments forwarded to the simulator binary after `--`.
@@ -147,6 +159,9 @@ enum Command {
         /// Build with FST trace support and dump waves to target/kiln/waves/.
         #[arg(long)]
         trace: bool,
+        /// Build profile to use. Defaults to `test`.
+        #[arg(long, default_value = "test")]
+        profile: String,
     },
 
     /// Generate a static documentation site under `target/doc/`.
@@ -154,7 +169,19 @@ enum Command {
         /// Open the generated index page in a browser.
         #[arg(long)]
         open: bool,
+        /// Build profile to use. Defaults to `dev`.
+        #[arg(long, default_value = "dev")]
+        profile: String,
     },
+
+    /// Inspect and query lint rules.
+    Lint {
+        #[command(subcommand)]
+        subcommand: LintSubcommand,
+    },
+
+    /// Print a JSON Schema for `Kiln.toml` to stdout.
+    Schema,
 
     /// Open a recorded FST waveform in surfer.
     Wave {
@@ -194,6 +221,17 @@ enum Command {
     },
 }
 
+#[derive(Debug, Subcommand)]
+enum LintSubcommand {
+    /// List all known lint rules.
+    List,
+    /// Explain a lint rule by name.
+    Explain {
+        /// Rule name (e.g. `width-trunc`).
+        name: String,
+    },
+}
+
 impl Cli {
     pub fn run(self) -> Result<()> {
         match self.command {
@@ -202,13 +240,33 @@ impl Cli {
             Command::Check {
                 deny_warnings,
                 verbose,
-            } => check::run(deny_warnings, verbose),
-            Command::Build { release, verbose } => build::run_build(release, verbose).map(|_| ()),
+                profile,
+            } => check::run(deny_warnings, verbose, &profile),
+            Command::Build {
+                release,
+                profile,
+                verbose,
+            } => {
+                let profile = if release {
+                    "release".to_string()
+                } else {
+                    profile
+                };
+                build::run_build(&profile, verbose).map(|_| ())
+            }
             Command::Run {
                 release,
+                profile,
                 verbose,
                 args,
-            } => build::run_run(release, verbose, args),
+            } => {
+                let profile = if release {
+                    "release".to_string()
+                } else {
+                    profile
+                };
+                build::run_run(&profile, verbose, args)
+            }
             Command::Clean => build::run_clean(),
             Command::Add {
                 name,
@@ -234,8 +292,14 @@ impl Cli {
                 no_fail_fast,
                 list,
                 trace,
-            } => test::run(filter, jobs, no_fail_fast, list, trace),
-            Command::Doc { open } => doc::run(open),
+                profile,
+            } => test::run(filter, jobs, no_fail_fast, list, trace, &profile),
+            Command::Doc { open, profile } => doc::run(open, &profile),
+            Command::Lint { subcommand } => match subcommand {
+                LintSubcommand::List => lint::run_list(),
+                LintSubcommand::Explain { name } => lint::run_explain(&name),
+            },
+            Command::Schema => schema::run(),
             Command::Wave { test, print_path } => wave::run(test, print_path),
             Command::Lsp => lsp::run(),
             Command::InstallTools {

@@ -11,7 +11,7 @@ sources = ["src/**/*.sv"]
 
 [lint]
 # Promote slang's width-trunc warning to an error so `kiln check` fails
-# loudly on it. Demote / suppress with `"warn"` or `"allow"`.
+# loudly on it. Demote / suppress with "warn" or "off".
 width-trunc = "error"
 
 [dependencies]

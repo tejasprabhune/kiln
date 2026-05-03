@@ -22,11 +22,14 @@
 //! assert_eq!(manifest.design.top, "demo_top");
 //! ```
 
+pub mod lint_map;
 pub mod manifest;
+pub mod profile;
 pub mod project;
 
 pub use manifest::{
-    Design, LintConfig, LintSeverity, Manifest, ManifestError, Package, ValidateOptions,
-    WaveConfig, WaveFormat,
+    Design, LintConfig, LintSeverity, Manifest, ManifestError, Package, SvLanguage, ToolSlang,
+    ToolVerible, ToolVerilator, Tools, TraceFormat, ValidateOptions, WaveConfig, WaveFormat,
 };
+pub use profile::ResolvedConfig;
 pub use project::{find_manifest, ProjectError, MANIFEST_FILENAME};

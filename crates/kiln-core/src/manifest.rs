@@ -3,10 +3,11 @@
 //! See `docs/manifest-spec.md` for the full schema reference.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// Errors that can occur when loading or validating a manifest.
@@ -37,6 +38,15 @@ pub enum ManifestError {
 
     #[error("include directory `{0}` does not exist")]
     MissingIncludeDir(PathBuf),
+
+    #[error(
+        "unknown lint rule `{name}`{}",
+        suggestion.as_deref().map(|s| format!("; did you mean `{s}`?")).unwrap_or_default()
+    )]
+    UnknownLintRule {
+        name: String,
+        suggestion: Option<String>,
+    },
 }
 
 /// A `Kiln.toml` manifest.
@@ -53,7 +63,246 @@ pub struct Manifest {
     #[serde(default)]
     pub lint: LintConfig,
     #[serde(default)]
+    pub tool: Tools,
+    #[serde(default)]
+    pub profile: BTreeMap<String, ProfileOverride>,
+    #[serde(default)]
     pub wave: WaveConfig,
+}
+
+/// `[package]` table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Package {
+    pub name: String,
+    pub version: String,
+    #[serde(default)]
+    pub authors: Vec<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub license: Option<String>,
+}
+
+/// `[design]` table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Design {
+    pub top: String,
+    #[serde(default = "Design::default_sources")]
+    pub sources: Vec<String>,
+    #[serde(default)]
+    pub timescale: Option<String>,
+    #[serde(default)]
+    pub language: Option<SvLanguage>,
+    #[serde(default)]
+    pub include_dirs: Vec<PathBuf>,
+    #[serde(default)]
+    pub defines: BTreeMap<String, String>,
+    #[serde(default)]
+    pub libraries: Vec<String>,
+    /// Glob patterns for testbench files. Overrides the default `tests/*.sv`
+    /// discovery when testbenches live elsewhere.
+    #[serde(default)]
+    pub test_sources: Vec<String>,
+}
+
+impl Design {
+    fn default_sources() -> Vec<String> {
+        vec![
+            "src/**/*.sv".into(),
+            "src/**/*.svh".into(),
+            "src/**/*.v".into(),
+        ]
+    }
+}
+
+/// SystemVerilog language standard.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum SvLanguage {
+    Sv2005,
+    Sv2009,
+    Sv2012,
+    Sv2017,
+    Sv2023,
+}
+
+/// `[lint]` table. Severity overrides keyed by canonical rule name,
+/// with optional tool-specific sub-tables.
+///
+/// Cannot use `deny_unknown_fields` here because `#[serde(flatten)]`
+/// is incompatible with it in serde's TOML backend.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LintConfig {
+    /// Canonical cross-tool lint rules.
+    #[serde(flatten)]
+    pub rules: BTreeMap<String, LintSeverity>,
+    /// Slang-specific lint options (under `[lint.slang]`).
+    #[serde(default)]
+    pub slang: BTreeMap<String, LintSeverity>,
+    /// Verilator-specific lint options (under `[lint.verilator]`).
+    #[serde(default)]
+    pub verilator: BTreeMap<String, LintSeverity>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LintSeverity {
+    Error,
+    Warn,
+    Off,
+    Deny,
+}
+
+/// `[tool]` table with per-tool config structs.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct Tools {
+    #[serde(default)]
+    pub slang: Option<ToolSlang>,
+    #[serde(default)]
+    pub verilator: Option<ToolVerilator>,
+    #[serde(default)]
+    pub verible: Option<ToolVerible>,
+}
+
+/// `[tool.slang]` table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ToolSlang {
+    #[serde(default)]
+    pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub extra_args: Vec<String>,
+}
+
+/// `[tool.verilator]` table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ToolVerilator {
+    #[serde(default)]
+    pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub threads: Option<u32>,
+    #[serde(default)]
+    pub trace: TraceFormat,
+    #[serde(default)]
+    pub coverage: bool,
+    #[serde(default)]
+    pub extra_args: Vec<String>,
+}
+
+impl Default for ToolVerilator {
+    fn default() -> Self {
+        Self {
+            path: None,
+            threads: None,
+            trace: TraceFormat::Off,
+            coverage: false,
+            extra_args: Vec::new(),
+        }
+    }
+}
+
+/// `[tool.verible]` table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ToolVerible {
+    #[serde(default)]
+    pub path: Option<PathBuf>,
+    #[serde(default)]
+    pub extra_args: Vec<String>,
+}
+
+/// Trace output format for verilator.
+///
+/// Accepts `false` (off), `"vcd"`, or `"fst"` in TOML. Custom
+/// Deserialize/Serialize handles the mixed-type encoding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TraceFormat {
+    #[default]
+    Off,
+    Vcd,
+    Fst,
+}
+
+impl<'de> Deserialize<'de> for TraceFormat {
+    fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = TraceFormat;
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "false, \"vcd\", or \"fst\"")
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<TraceFormat, E> {
+                if v {
+                    Err(E::custom("use \"vcd\" or \"fst\" instead of true"))
+                } else {
+                    Ok(TraceFormat::Off)
+                }
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<TraceFormat, E> {
+                match v {
+                    "vcd" => Ok(TraceFormat::Vcd),
+                    "fst" => Ok(TraceFormat::Fst),
+                    other => Err(E::unknown_variant(other, &["vcd", "fst"])),
+                }
+            }
+        }
+        de.deserialize_any(Visitor)
+    }
+}
+
+impl Serialize for TraceFormat {
+    fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        match self {
+            TraceFormat::Off => ser.serialize_bool(false),
+            TraceFormat::Vcd => ser.serialize_str("vcd"),
+            TraceFormat::Fst => ser.serialize_str("fst"),
+        }
+    }
+}
+
+/// `[profile.<name>]` override table.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ProfileOverride {
+    #[serde(default)]
+    pub design: Option<DesignOverride>,
+    #[serde(default)]
+    pub lint: Option<LintConfig>,
+    #[serde(default)]
+    pub tool: Option<ToolsOverride>,
+}
+
+/// Partial design fields for profile overrides.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DesignOverride {
+    #[serde(default)]
+    pub top: Option<String>,
+    #[serde(default)]
+    pub timescale: Option<String>,
+    #[serde(default)]
+    pub language: Option<SvLanguage>,
+    #[serde(default)]
+    pub include_dirs: Option<Vec<PathBuf>>,
+    #[serde(default)]
+    pub defines: Option<BTreeMap<String, String>>,
+    #[serde(default)]
+    pub libraries: Option<Vec<String>>,
+}
+
+/// Per-tool overrides inside a profile.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct ToolsOverride {
+    #[serde(default)]
+    pub slang: Option<ToolSlang>,
+    #[serde(default)]
+    pub verilator: Option<ToolVerilator>,
+    #[serde(default)]
+    pub verible: Option<ToolVerible>,
 }
 
 /// `[wave]` table.
@@ -83,75 +332,6 @@ pub enum WaveFormat {
     #[default]
     Fst,
     Vcd,
-}
-
-/// `[lint]` table. Severity overrides per slang diagnostic ID.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct LintConfig {
-    /// Map of slang diagnostic ID → severity override.
-    /// Keys are slang's `optionName` strings (e.g. `width-trunc`).
-    /// `error | warn | allow`. All entries in `[lint]` land here via
-    /// `#[serde(flatten)]`; that's why we don't use
-    /// `deny_unknown_fields` on this struct (we *want* every key).
-    #[serde(flatten)]
-    pub rules: BTreeMap<String, LintSeverity>,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum LintSeverity {
-    Error,
-    Warn,
-    Allow,
-}
-
-/// `[package]` table.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Package {
-    pub name: String,
-    pub version: String,
-    #[serde(default)]
-    pub authors: Vec<String>,
-    #[serde(default)]
-    pub description: Option<String>,
-    #[serde(default)]
-    pub license: Option<String>,
-}
-
-/// `[design]` table.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Design {
-    pub top: String,
-    #[serde(default = "Design::default_sources")]
-    pub sources: Vec<String>,
-    #[serde(default)]
-    pub include_dirs: Vec<PathBuf>,
-    #[serde(default)]
-    pub defines: BTreeMap<String, String>,
-    /// Raw arguments forwarded verbatim to slang. Use for flags kiln does
-    /// not expose directly (e.g. `--timescale 1ns/1ps`).
-    #[serde(default)]
-    pub slang_args: Vec<String>,
-    /// Raw arguments forwarded verbatim to verilator. Use for flags kiln
-    /// does not expose directly (e.g. `--timing`, `-Wno-TIMESCALEMOD`).
-    #[serde(default)]
-    pub verilator_args: Vec<String>,
-    /// Glob patterns for testbench files. Overrides the default `tests/*.sv`
-    /// discovery when your testbenches live elsewhere (e.g. `sim/*_tb.sv`).
-    #[serde(default)]
-    pub test_sources: Vec<String>,
-}
-
-impl Design {
-    fn default_sources() -> Vec<String> {
-        vec![
-            "src/**/*.sv".into(),
-            "src/**/*.svh".into(),
-            "src/**/*.v".into(),
-        ]
-    }
 }
 
 /// Toggles for `Manifest::validate`. `kiln new` disables filesystem checks
@@ -196,7 +376,7 @@ impl Manifest {
     }
 
     /// Validation that needs no filesystem context.
-    fn validate_static(&self) -> Result<(), ManifestError> {
+    pub fn validate_static(&self) -> Result<(), ManifestError> {
         if !is_valid_sv_identifier(&self.package.name) {
             return Err(ManifestError::InvalidPackageName(self.package.name.clone()));
         }
@@ -224,6 +404,45 @@ impl Manifest {
             }
         }
         Ok(())
+    }
+
+    /// Merged slang lint rules for a given profile. Canonical rules are
+    /// translated to slang option names; profile overlay wins on conflict.
+    pub fn resolved_lint_for_slang(&self, profile: &str) -> BTreeMap<String, LintSeverity> {
+        let mut out: BTreeMap<String, LintSeverity> = self.lint.rules.clone();
+        for (k, v) in &self.lint.slang {
+            out.insert(k.clone(), *v);
+        }
+        if let Some(overlay) = self.profile.get(profile) {
+            if let Some(lint) = &overlay.lint {
+                for (k, v) in &lint.rules {
+                    out.insert(k.clone(), *v);
+                }
+                for (k, v) in &lint.slang {
+                    out.insert(k.clone(), *v);
+                }
+            }
+        }
+        out
+    }
+
+    /// Merged verilator lint rules for a given profile.
+    pub fn resolved_lint_for_verilator(&self, profile: &str) -> BTreeMap<String, LintSeverity> {
+        let mut out: BTreeMap<String, LintSeverity> = self.lint.rules.clone();
+        for (k, v) in &self.lint.verilator {
+            out.insert(k.clone(), *v);
+        }
+        if let Some(overlay) = self.profile.get(profile) {
+            if let Some(lint) = &overlay.lint {
+                for (k, v) in &lint.rules {
+                    out.insert(k.clone(), *v);
+                }
+                for (k, v) in &lint.verilator {
+                    out.insert(k.clone(), *v);
+                }
+            }
+        }
+        out
     }
 }
 
@@ -420,8 +639,6 @@ mod tests {
         .unwrap();
         let err = Manifest::load(&tmp.path().join("Kiln.toml")).unwrap_err();
         assert!(matches!(err, ManifestError::MissingIncludeDir(_)));
-        // Additional snapshot: the formatted message of our own error type.
-        // Stable, so safe to snapshot (unlike toml::de::Error formatting).
         insta::assert_snapshot!(
             "invalid_missing_include_dir",
             ManifestError::MissingIncludeDir(std::path::PathBuf::from("does/not/exist"))
@@ -460,5 +677,287 @@ mod tests {
         for bad in ["", "1abc", "a-b", "a.b", "a b", "ä"] {
             assert!(!is_valid_sv_identifier(bad), "{bad} should be invalid");
         }
+    }
+
+    #[test]
+    fn design_timescale_and_language() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+            timescale = "1ns/1ps"
+            language = "sv2017"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.design.timescale.as_deref(), Some("1ns/1ps"));
+        assert_eq!(m.design.language, Some(SvLanguage::Sv2017));
+    }
+
+    #[test]
+    fn tool_slang_extra_args() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.slang]
+            extra_args = ["--allow-hierarchical-const"]
+            "#,
+        )
+        .unwrap();
+        let slang = m.tool.slang.as_ref().unwrap();
+        assert_eq!(slang.extra_args, vec!["--allow-hierarchical-const"]);
+    }
+
+    #[test]
+    fn tool_verilator_options() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.verilator]
+            threads = 4
+            trace = "fst"
+            coverage = true
+            extra_args = ["--x-assign", "0"]
+            "#,
+        )
+        .unwrap();
+        let v = m.tool.verilator.as_ref().unwrap();
+        assert_eq!(v.threads, Some(4));
+        assert_eq!(v.trace, TraceFormat::Fst);
+        assert!(v.coverage);
+        assert_eq!(v.extra_args, vec!["--x-assign", "0"]);
+    }
+
+    #[test]
+    fn trace_format_from_false() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.verilator]
+            trace = false
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.tool.verilator.as_ref().unwrap().trace, TraceFormat::Off);
+    }
+
+    #[test]
+    fn trace_format_from_vcd() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.verilator]
+            trace = "vcd"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.tool.verilator.as_ref().unwrap().trace, TraceFormat::Vcd);
+    }
+
+    #[test]
+    fn lint_slang_and_verilator_subtables() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [lint]
+            width-trunc = "error"
+
+            [lint.slang]
+            relax-enum-conversions = "off"
+
+            [lint.verilator]
+            GENUNNAMED = "warn"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.lint.rules.get("width-trunc"), Some(&LintSeverity::Error));
+        assert_eq!(
+            m.lint.slang.get("relax-enum-conversions"),
+            Some(&LintSeverity::Off)
+        );
+        assert_eq!(
+            m.lint.verilator.get("GENUNNAMED"),
+            Some(&LintSeverity::Warn)
+        );
+    }
+
+    #[test]
+    fn profile_tool_verilator_override() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [profile.test.tool.verilator]
+            trace = "fst"
+            coverage = true
+            "#,
+        )
+        .unwrap();
+        let overlay = m.profile.get("test").unwrap();
+        let vt = overlay.tool.as_ref().unwrap().verilator.as_ref().unwrap();
+        assert_eq!(vt.trace, TraceFormat::Fst);
+        assert!(vt.coverage);
+    }
+
+    #[test]
+    fn deny_unknown_fields_package() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            unknown_key = "oops"
+
+            [design]
+            top = "t"
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::Parse(_)));
+    }
+
+    #[test]
+    fn deny_unknown_fields_design() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+            slang_args = []
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::Parse(_)));
+    }
+
+    #[test]
+    fn deny_unknown_fields_tool_slang() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.slang]
+            weird = true
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::Parse(_)));
+    }
+
+    #[test]
+    fn deny_unknown_fields_tool_verilator() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.verilator]
+            bad_field = 99
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::Parse(_)));
+    }
+
+    #[test]
+    fn round_trip_parse_serialize_parse() {
+        let src = r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+            timescale = "1ns/1ps"
+            language = "sv2017"
+
+            [tool.verilator]
+            threads = 2
+            trace = "fst"
+            coverage = false
+
+            [lint]
+            width-trunc = "error"
+
+            [lint.slang]
+            relax-enum-conversions = "off"
+        "#;
+        let m1: Manifest = src.parse().unwrap();
+        let serialized = toml::to_string(&m1).unwrap();
+        let m2: Manifest = serialized.parse().unwrap();
+        assert_eq!(m1, m2);
+    }
+
+    #[test]
+    fn lint_config_round_trips_in_manifest() {
+        let m: Manifest = r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [lint]
+            width-trunc = "error"
+            unused-net = "warn"
+            implicit-net = "off"
+        "#
+        .parse()
+        .unwrap();
+        assert_eq!(m.lint.rules.len(), 3);
+        assert_eq!(m.lint.rules.get("width-trunc"), Some(&LintSeverity::Error));
+        assert_eq!(m.lint.rules.get("implicit-net"), Some(&LintSeverity::Off));
     }
 }

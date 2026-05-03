@@ -7,14 +7,15 @@ use std::time::Instant;
 use anyhow::{anyhow, bail, Context, Result};
 
 use kiln_build::backend::verilator;
-use kiln_build::{BuildPlan, Profile, SourceSet};
+use kiln_build::{BuildPlan, SourceSet};
+use kiln_core::ResolvedConfig;
 use kiln_core::{find_manifest, Manifest};
 use kiln_deps::ResolvedSources;
 
 use crate::render;
 use crate::reporter;
 
-pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
+pub fn run_build(profile_name: &str, verbose: bool) -> Result<BuildArtifacts> {
     if verbose {
         bump_log_level();
     }
@@ -29,28 +30,33 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
 
+    let resolved = ResolvedConfig::resolve(&manifest, profile_name);
+
     let mut source_set = SourceSet::resolve(&project_root, &manifest)?;
     let mut dep_include_dirs: Vec<std::path::PathBuf> = Vec::new();
     if !manifest.dependencies.is_empty() {
         reporter::status("Resolving", "dependencies via bender");
-        let resolved: ResolvedSources = kiln_deps::resolve(&project_root, &manifest)?;
+        let resolved_srcs: ResolvedSources = kiln_deps::resolve(&project_root, &manifest)?;
         reporter::debug(
             "Resolved",
-            format!("{} package(s) from `Kiln.lock`", resolved.packages.len()),
+            format!(
+                "{} package(s) from `Kiln.lock`",
+                resolved_srcs.packages.len()
+            ),
         );
-        for f in resolved.all_files() {
+        for f in resolved_srcs.all_files() {
             if !source_set.files.contains(&f) {
                 source_set.files.push(f);
             }
         }
-        dep_include_dirs = resolved.all_include_dirs();
+        dep_include_dirs = resolved_srcs.all_include_dirs();
     }
-    let profile = if release {
-        Profile::Release
+    let profile = if profile_name == "release" {
+        kiln_build::Profile::Release
     } else {
-        Profile::Debug
+        kiln_build::Profile::Debug
     };
-    let mut plan = BuildPlan::new(&manifest, &source_set, profile);
+    let mut plan = BuildPlan::from_resolved(&resolved, &source_set, profile);
     for d in dep_include_dirs {
         if !plan.include_dirs.contains(&d) {
             plan.include_dirs.push(d);
@@ -59,11 +65,7 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
 
     reporter::status(
         "Compiling",
-        format!(
-            "`{}` with verilator ({} profile)",
-            plan.top,
-            plan.profile.as_str()
-        ),
+        format!("`{}` with verilator ({profile_name} profile)", plan.top),
     );
     let outcome = verilator::compile(&plan)?;
 
@@ -92,9 +94,8 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
         reporter::info(
             "Cache hit",
             format!(
-                "`{}` ({} profile) at {}",
+                "`{}` ({profile_name} profile) at {}",
                 plan.top,
-                plan.profile.as_str(),
                 reporter::dim(&binary.display().to_string())
             ),
         );
@@ -102,9 +103,8 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
         reporter::status(
             "Finished",
             format!(
-                "`{}` ({} profile) in {}",
+                "`{}` ({profile_name} profile) in {}",
                 plan.top,
-                plan.profile.as_str(),
                 fmt_elapsed(elapsed)
             ),
         );
@@ -117,8 +117,8 @@ pub fn run_build(release: bool, verbose: bool) -> Result<BuildArtifacts> {
     })
 }
 
-pub fn run_run(release: bool, verbose: bool, forwarded: Vec<String>) -> Result<()> {
-    let artifacts = run_build(release, verbose)?;
+pub fn run_run(profile_name: &str, verbose: bool, forwarded: Vec<String>) -> Result<()> {
+    let artifacts = run_build(profile_name, verbose)?;
     reporter::status(
         "Running",
         format!(

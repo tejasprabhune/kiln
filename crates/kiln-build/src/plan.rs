@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use kiln_core::Manifest;
+use kiln_core::{Manifest, ResolvedConfig};
 
 use crate::source_set::SourceSet;
 
@@ -46,20 +46,35 @@ pub struct BuildPlan {
 
 impl BuildPlan {
     pub fn new(manifest: &Manifest, source_set: &SourceSet, profile: Profile) -> Self {
+        let resolved = ResolvedConfig::resolve(manifest, profile.as_str());
+        Self::from_resolved(&resolved, source_set, profile)
+    }
+
+    /// Construct a plan from an already-resolved config.
+    pub fn from_resolved(
+        resolved: &ResolvedConfig,
+        source_set: &SourceSet,
+        profile: Profile,
+    ) -> Self {
+        use kiln_core::TraceFormat;
+        let trace = matches!(
+            resolved.tool_verilator.trace,
+            TraceFormat::Vcd | TraceFormat::Fst
+        );
         Self {
             project_root: source_set.project_root.clone(),
-            top: manifest.design.top.clone(),
+            top: resolved.design.top.clone(),
             sources: source_set.files.clone(),
-            include_dirs: manifest
+            include_dirs: resolved
                 .design
                 .include_dirs
                 .iter()
                 .map(|p| source_set.project_root.join(p))
                 .collect(),
-            defines: manifest.design.defines.clone(),
+            defines: resolved.design.defines.clone(),
             profile,
-            trace: false,
-            extra_verilator_args: manifest.design.verilator_args.clone(),
+            trace,
+            extra_verilator_args: resolved.tool_verilator.extra_args.clone(),
         }
     }
 

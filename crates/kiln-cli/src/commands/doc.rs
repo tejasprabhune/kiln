@@ -11,7 +11,7 @@ use slang_rs::Slang;
 use crate::commands::build::fmt_elapsed;
 use crate::reporter;
 
-pub fn run(open: bool) -> Result<()> {
+pub fn run(open: bool, _profile: &str) -> Result<()> {
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;
     let project_root = manifest_path
