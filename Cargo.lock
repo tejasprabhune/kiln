@@ -68,6 +68,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f202df86484c868dbad7eaa557ef785d5c66295e41b460ef922eca0723b842c"
 
 [[package]]
+name = "ariadne"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44055e597c674aef7cb903b2b9f6e4cba1277ed0d2d61dae7cd52d7ffa81f8e2"
+dependencies = [
+ "unicode-width",
+ "yansi",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -397,7 +407,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "kiln-sv"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -425,8 +435,9 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-build"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
+ "ariadne",
  "blake3",
  "glob",
  "insta",
@@ -441,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-core"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "glob",
  "insta",
@@ -459,7 +470,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-deps"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "glob",
  "insta",
@@ -475,7 +486,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-doc"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "kiln-sv-build",
  "kiln-sv-core",
@@ -487,7 +498,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-fmt"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "insta",
  "kiln-sv-core",
@@ -500,7 +511,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-lint"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "kiln-sv-build",
  "kiln-sv-core",
@@ -512,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-test"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "glob",
  "kiln-sv-build",
@@ -526,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-wave"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "kiln-sv-core",
  "tempfile",
@@ -876,7 +887,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "slang-sv-rs"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "insta",
  "serde",
@@ -1064,6 +1075,12 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "unicode-width"
+version = "0.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dd6e30e90baa6f72411720665d41d89b9a3d039dc45b8faea1ddd07f617f6af"
 
 [[package]]
 name = "unicode-xid"
@@ -1371,6 +1388,12 @@ dependencies = [
  "unicode-xid",
  "wasmparser",
 ]
+
+[[package]]
+name = "yansi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"
 
 [[package]]
 name = "zmij"
