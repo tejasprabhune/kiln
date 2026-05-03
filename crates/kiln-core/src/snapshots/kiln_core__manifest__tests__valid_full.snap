@@ -1,6 +1,6 @@
 ---
 source: crates/kiln-core/src/manifest.rs
-assertion_line: 275
+assertion_line: 279
 expression: m
 ---
 package:
@@ -19,6 +19,7 @@ design:
   defines:
     BAR: ""
     FOO: "1"
+  slang_args: []
 dependencies: {}
 lint: {}
 wave:

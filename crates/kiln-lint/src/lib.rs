@@ -42,6 +42,9 @@ pub fn check(
             req = req.extra_arg(format!("-W{id}"));
         }
     }
+    for arg in &manifest.design.slang_args {
+        req = req.extra_arg(arg.clone());
+    }
     // We do *not* pass `--parse-only` here. Slang skips writing the
     // `--diag-json` file when parse-only is set, and we want full
     // elaboration anyway so semantic warnings (width-trunc, etc.) fire.

@@ -28,7 +28,7 @@ pub fn run(open: bool) -> Result<()> {
     let started = Instant::now();
     let slang = Slang::new()?;
     let out_dir = project_root.join("target").join("doc");
-    let docset = kiln_doc::generate(&slang, &manifest.package.name, &source_set, &out_dir)?;
+    let docset = kiln_doc::generate(&slang, &manifest, &source_set, &out_dir)?;
     let index = out_dir.join("index.html");
     reporter::status(
         "Generated",

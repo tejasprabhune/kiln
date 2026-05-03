@@ -144,8 +144,24 @@
         <td>string-to-string map</td>
         <td><span class="default"><code>{}</code></span></td>
       </tr>
+      <tr>
+        <td><code>slang_args</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
     </tbody>
   </table>
+  <p>
+    <code>slang_args</code> passes arguments verbatim to slang after all
+    kiln-managed flags. Use it for flags kiln does not expose directly.
+    The most common use is supplying a default timescale for designs that mix
+    files with and without <code>`timescale</code> directives (a hard error in slang
+    that <code>[lint]</code> cannot suppress):
+  </p>
+  <pre><code>[design]
+top       = "my_top"
+slang_args = ["--timescale", "1ns/1ps"]</code></pre>
   <p>
     Globs are evaluated relative to the directory containing <code>Kiln.toml</code>.
     <code>include_dirs</code> entries must exist on disk when the manifest is loaded

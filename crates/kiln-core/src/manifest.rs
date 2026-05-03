@@ -130,6 +130,10 @@ pub struct Design {
     pub include_dirs: Vec<PathBuf>,
     #[serde(default)]
     pub defines: BTreeMap<String, String>,
+    /// Raw arguments forwarded verbatim to slang. Use for flags kiln does
+    /// not expose directly (e.g. `--timescale 1ns/1ps`).
+    #[serde(default)]
+    pub slang_args: Vec<String>,
 }
 
 impl Design {

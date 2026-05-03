@@ -26,6 +26,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use kiln_build::SourceSet;
+use kiln_core::Manifest;
 use slang_rs::SlangError;
 
 #[derive(Debug, Error)]
@@ -46,11 +47,11 @@ pub enum DocError {
 /// `manifest_top` is the package name, used as the site title.
 pub fn generate(
     slang: &slang_rs::Slang,
-    manifest_top: &str,
+    manifest: &Manifest,
     source_set: &SourceSet,
     out_dir: &Path,
 ) -> Result<DocSet, DocError> {
-    let docset = extract::extract(slang, source_set)?;
-    site::write_site(manifest_top, &docset, out_dir)?;
+    let docset = extract::extract(slang, manifest, source_set)?;
+    site::write_site(&manifest.design.top, &docset, out_dir)?;
     Ok(docset)
 }

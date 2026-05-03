@@ -7,6 +7,7 @@ use slang_rs::{CompileRequest, Slang};
 
 use crate::DocError;
 use kiln_build::SourceSet;
+use kiln_core::Manifest;
 
 /// One documented item.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,7 +51,7 @@ pub struct DocSet {
 /// pass is run anyway so that future cross-references (port types,
 /// instance hierarchy) can hang off real elaborated AST data; M8's
 /// acceptance criteria don't depend on it yet.
-pub fn extract(slang: &Slang, source_set: &SourceSet) -> Result<DocSet, DocError> {
+pub fn extract(slang: &Slang, manifest: &Manifest, source_set: &SourceSet) -> Result<DocSet, DocError> {
     // Source pass: enumerate items + their attached docs.
     let mut items: BTreeMap<String, DocItem> = BTreeMap::new();
     for f in source_set.files() {
@@ -81,6 +82,9 @@ pub fn extract(slang: &Slang, source_set: &SourceSet) -> Result<DocSet, DocError
         let mut b = CompileRequest::builder();
         for f in source_set.files() {
             b = b.source(f.clone());
+        }
+        for arg in &manifest.design.slang_args {
+            b = b.extra_arg(arg.clone());
         }
         b.want_ast(true).build()
     };

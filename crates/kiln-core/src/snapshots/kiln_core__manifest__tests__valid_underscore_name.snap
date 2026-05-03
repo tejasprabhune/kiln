@@ -1,6 +1,6 @@
 ---
 source: crates/kiln-core/src/manifest.rs
-assertion_line: 291
+assertion_line: 295
 expression: m
 ---
 package:
@@ -17,6 +17,7 @@ design:
     - src/**/*.v
   include_dirs: []
   defines: {}
+  slang_args: []
 dependencies: {}
 lint: {}
 wave:
