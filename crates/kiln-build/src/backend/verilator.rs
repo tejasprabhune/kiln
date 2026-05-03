@@ -104,7 +104,9 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
         cmd.arg("-y").arg(lib);
     }
     for inc in &plan.include_dirs {
-        cmd.arg("-I").arg(inc);
+        let mut flag = OsString::from("-I");
+        flag.push(inc);
+        cmd.arg(flag);
     }
     for (k, v) in &plan.defines {
         let combined = if v.is_empty() {
