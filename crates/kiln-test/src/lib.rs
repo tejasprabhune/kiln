@@ -9,9 +9,8 @@
 //! Today: native SystemVerilog testbenches under `tests/*.sv`. Each
 //! file's top module is the filename stem; the testbench is built
 //! through `kiln-build`'s Verilator backend (so it reuses the same
-//! cache, plan, and diagnostic shape) and executed. Exit code 0 plus
-//! the literal token `"PASS"` on stdout is success; anything else is
-//! failure.
+//! cache, plan, and diagnostic shape) and executed. Exit code 0 is
+//! success; anything else is failure.
 //!
 //! Cocotb is documented in the milestones doc but deliberately deferred
 //! beyond M5: it requires a Python runtime and cocotb installed system-
@@ -285,8 +284,7 @@ fn run_buffered(
         .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    let stdout_lower = stdout.to_lowercase();
-    let passed = output.status.success() && stdout_lower.contains("pass");
+    let passed = output.status.success();
     Ok(TestOutcome { name: name.to_string(), passed, elapsed: start.elapsed(), stdout, stderr })
 }
 
@@ -315,15 +313,9 @@ fn run_streaming(
         }
     });
 
-    // stdout_contains_pass tracks whether "PASS" appeared anywhere so we
-    // can determine pass/fail after streaming finishes.
-    let mut stdout_has_pass = false;
     if let Some(stdout_pipe) = child.stdout.take() {
         let reader = BufReader::new(stdout_pipe);
         for line in reader.lines().map_while(Result::ok) {
-            if line.to_lowercase().contains("pass") {
-                stdout_has_pass = true;
-            }
             println!("{line}");
         }
     }
@@ -332,7 +324,7 @@ fn run_streaming(
     let status = child
         .wait()
         .map_err(|source| TestError::Io { path: binary.to_path_buf(), source })?;
-    let passed = status.success() && stdout_has_pass;
+    let passed = status.success();
 
     Ok(TestOutcome {
         name: name.to_string(),
