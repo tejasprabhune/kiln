@@ -1,5 +1,6 @@
 ---
 source: crates/kiln-core/src/manifest.rs
+assertion_line: 746
 expression: m
 ---
 package:
@@ -32,3 +33,9 @@ profile: {}
 wave:
   format: fst
   enabled_by_default: false
+test:
+  working_dir: ~
+  detect: ~
+  timeout: ~
+  cases: []
+  matrix: []

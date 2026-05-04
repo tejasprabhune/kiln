@@ -89,6 +89,17 @@ pub struct TestConfig {
     #[serde(default)]
     pub working_dir: Option<PathBuf>,
 
+    /// Default pass/fail detection rule for tests that don't override it.
+    /// Defaults to [`Detect::ExitCode`] — exit 0 = pass.
+    #[serde(default)]
+    pub detect: Option<Detect>,
+
+    /// Default per-test wallclock timeout (e.g. `"30s"`, `"2m"`). Tests
+    /// exceeding this are killed and reported as `TIMEOUT`. Unset = no
+    /// timeout.
+    #[serde(default)]
+    pub timeout: Option<DurationSpec>,
+
     /// Explicit test cases. Each entry names a testbench (by file stem) and
     /// provides runtime arguments (plusargs, etc.) for that invocation.
     /// Multiple entries can reuse the same testbench with different args —
@@ -99,6 +110,108 @@ pub struct TestConfig {
     /// binary but are run as separate named tests with their own args.
     #[serde(default)]
     pub cases: Vec<TestCase>,
+
+    /// Glob-driven parameterized test cases. Each `[[test.matrix]]` entry
+    /// expands a glob into one [`TestCase`]-equivalent per matched file,
+    /// with `{stem}`, `{path}`, `{abs_path}`, `{name}`, `{parent}` template
+    /// substitution available in `args`, `plusargs`, `prebuild`, and the
+    /// generated test name.
+    #[serde(default)]
+    pub matrix: Vec<TestMatrix>,
+}
+
+/// Pass/fail detection rule for a test. The default
+/// [`Detect::ExitCode`] checks the simulator's exit status. The
+/// [`Detect::Patterns`] variant lets testbenches that always
+/// `$finish()` cleanly (regardless of pass/fail) signal outcome via
+/// stdout markers.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "snake_case")]
+pub enum Detect {
+    /// Exit code 0 = pass, anything else = fail. The default.
+    ExitCode,
+    /// Pattern match on stdout. A test passes if every
+    /// `stdout_contains` substring is present and no
+    /// `stdout_must_not_contain` substring appears. Exit code is
+    /// ignored when this variant is used.
+    Patterns {
+        #[serde(default)]
+        stdout_contains: Vec<String>,
+        #[serde(default)]
+        stdout_must_not_contain: Vec<String>,
+    },
+}
+
+impl Default for Detect {
+    fn default() -> Self {
+        Detect::ExitCode
+    }
+}
+
+/// A duration that round-trips through TOML as a string like `"30s"`,
+/// `"500ms"`, or `"2m"`. Parsed once at manifest load time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DurationSpec(pub std::time::Duration);
+
+impl DurationSpec {
+    pub fn as_duration(&self) -> std::time::Duration {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for DurationSpec {
+    fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(de)?;
+        parse_duration(&s)
+            .map(DurationSpec)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+impl Serialize for DurationSpec {
+    fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+        // Prefer the most natural unit for round-trip readability.
+        let d = self.0;
+        let s = if d.as_millis() % 1000 != 0 {
+            format!("{}ms", d.as_millis())
+        } else if d.as_secs() % 60 != 0 || d.as_secs() == 0 {
+            format!("{}s", d.as_secs())
+        } else if d.as_secs() % 3600 != 0 {
+            format!("{}m", d.as_secs() / 60)
+        } else {
+            format!("{}h", d.as_secs() / 3600)
+        };
+        ser.serialize_str(&s)
+    }
+}
+
+fn parse_duration(s: &str) -> Result<std::time::Duration, String> {
+    let s = s.trim();
+    let (num_part, unit) = if let Some(stripped) = s.strip_suffix("ms") {
+        (stripped, "ms")
+    } else if let Some(stripped) = s.strip_suffix('s') {
+        (stripped, "s")
+    } else if let Some(stripped) = s.strip_suffix('m') {
+        (stripped, "m")
+    } else if let Some(stripped) = s.strip_suffix('h') {
+        (stripped, "h")
+    } else {
+        return Err(format!(
+            "duration `{s}` must end in `ms`, `s`, `m`, or `h`"
+        ));
+    };
+    let n: u64 = num_part
+        .trim()
+        .parse()
+        .map_err(|e| format!("duration `{s}` has non-integer count: {e}"))?;
+    let d = match unit {
+        "ms" => std::time::Duration::from_millis(n),
+        "s" => std::time::Duration::from_secs(n),
+        "m" => std::time::Duration::from_secs(n * 60),
+        "h" => std::time::Duration::from_secs(n * 3600),
+        _ => unreachable!(),
+    };
+    Ok(d)
 }
 
 /// A single explicit test case that references a testbench by name and
@@ -114,6 +227,71 @@ pub struct TestCase {
     /// (e.g. `["+hex_file=../../software/c_tests/fib/fib.hex", "+test_name=fib"]`).
     #[serde(default)]
     pub args: Vec<String>,
+    /// Shell command to run before the simulator binary. Useful for
+    /// regenerating `$readmemh` hex files from C/asm sources. Runs
+    /// once per unique command per `kiln test` invocation (deduped by
+    /// command string), executed at the project root.
+    #[serde(default)]
+    pub prebuild: Option<String>,
+    /// Per-case pass/fail detection rule, overrides `[test] detect`.
+    #[serde(default)]
+    pub detect: Option<Detect>,
+    /// Per-case wallclock timeout, overrides `[test] timeout`.
+    #[serde(default)]
+    pub timeout: Option<DurationSpec>,
+    /// Tags for selection via `--tag`.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Per-case working directory override (relative to project root).
+    /// Falls back to `[test] working_dir`, then to the project root.
+    #[serde(default)]
+    pub working_dir: Option<PathBuf>,
+}
+
+/// A glob-driven parameterized test family. Each matched input becomes
+/// a synthetic [`TestCase`] with template substitution applied to the
+/// generated name and to every arg.
+///
+/// Supported substitutions in `args`, `prebuild`, and (the suffix of)
+/// `name_prefix`:
+///
+/// - `{stem}` — matched file's stem (e.g. `"add"` for `add.hex`)
+/// - `{name}` — matched file's basename (e.g. `"add.hex"`)
+/// - `{path}` — matched file's path relative to the project root
+/// - `{abs_path}` — matched file's absolute path
+/// - `{parent}` — matched file's parent directory, relative to project root
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct TestMatrix {
+    /// File stem of the testbench source.
+    pub testbench: String,
+    /// Glob pattern (relative to project root) selecting input files.
+    pub inputs: String,
+    /// Prefix prepended to `{stem}` to form the generated test name.
+    /// Defaults to `""` (i.e., name == stem).
+    #[serde(default)]
+    pub name_prefix: String,
+    /// Argument templates appended to the simulation invocation. Each
+    /// string is run through template substitution before passing to
+    /// the binary.
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// Shell command template run once per matrix row before the
+    /// corresponding test, deduped by final substituted string.
+    #[serde(default)]
+    pub prebuild: Option<String>,
+    /// Detection rule applied to every generated case.
+    #[serde(default)]
+    pub detect: Option<Detect>,
+    /// Wallclock timeout applied to every generated case.
+    #[serde(default)]
+    pub timeout: Option<DurationSpec>,
+    /// Tags applied to every generated case.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Working directory applied to every generated case.
+    #[serde(default)]
+    pub working_dir: Option<PathBuf>,
 }
 
 /// `[package]` table.

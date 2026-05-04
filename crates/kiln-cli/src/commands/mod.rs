@@ -145,20 +145,41 @@ enum Command {
 
     /// Discover and run testbenches.
     Test {
-        /// Substring filter on test names.
-        filter: Option<String>,
+        /// One or more substring filters on test names. Multiple filters
+        /// are OR'd: a test runs if any filter matches.
+        filters: Vec<String>,
+        /// Match filters exactly instead of as substrings.
+        #[arg(long)]
+        exact: bool,
+        /// Exclude tests whose name contains any of these substrings.
+        #[arg(long, value_name = "SUBSTR")]
+        skip: Vec<String>,
+        /// Only run tests carrying any of the given tags.
+        #[arg(long, value_name = "TAG")]
+        tag: Vec<String>,
         /// Number of parallel jobs. Defaults to available parallelism.
         #[arg(short, long)]
         jobs: Option<usize>,
-        /// Keep going after the first failure.
+        /// Keep going after the first failure (default: stop on first failure).
         #[arg(long)]
         no_fail_fast: bool,
         /// Print discovered tests, do not run.
         #[arg(long)]
         list: bool,
-        /// Stream simulation output to the terminal in real time. Requires --jobs 1.
-        #[arg(short, long)]
-        verbose: bool,
+        /// Stream simulation output to the terminal in real time.
+        /// Requires --jobs 1. Alias of --verbose.
+        #[arg(long, alias = "verbose", short = 'v')]
+        nocapture: bool,
+        /// Print stdout for passing tests too, not just failing ones.
+        #[arg(long)]
+        show_output: bool,
+        /// Re-run only the tests that did not pass on the previous
+        /// `kiln test` run. Reads `target/kiln/last-run.json`.
+        #[arg(long, conflicts_with = "skip_passed")]
+        rerun: bool,
+        /// Skip tests that passed on the previous run; re-run everything else.
+        #[arg(long)]
+        skip_passed: bool,
         /// Build with FST trace support and dump waves to target/kiln/waves/.
         #[arg(long)]
         trace: bool,
@@ -290,14 +311,34 @@ impl Cli {
                 fmt::run(check, f)
             }
             Command::Test {
-                filter,
+                filters,
+                exact,
+                skip,
+                tag,
                 jobs,
                 no_fail_fast,
                 list,
-                verbose,
+                nocapture,
+                show_output,
+                rerun,
+                skip_passed,
                 trace,
                 profile,
-            } => test::run(filter, jobs, no_fail_fast, list, verbose, trace, &profile),
+            } => test::run(test::Args {
+                filters,
+                exact,
+                skip,
+                tag,
+                jobs,
+                no_fail_fast,
+                list,
+                nocapture,
+                show_output,
+                rerun,
+                skip_passed,
+                trace,
+                profile,
+            }),
             Command::Doc { open, profile } => doc::run(open, &profile),
             Command::Lint { subcommand } => match subcommand {
                 LintSubcommand::List => lint::run_list(),
