@@ -1,9 +1,17 @@
-//! Verilator backend. Wraps `verilator --binary` and parses its output
-//! into [`crate::BuildDiagnostic`]s.
+//! Verilator backend. Wraps `verilator` and parses its output into
+//! [`crate::BuildDiagnostic`]s.
+//!
+//! Flag selection is version-aware. Modern Verilator (≥ 5.0) supports
+//! `--binary`, which is shorthand for `--main --exe --build`. Older
+//! lab installs (4.218 ≤ ver < 5.0) accept `--main --exe --build`
+//! directly. Anything older surfaces a clear "upgrade Verilator"
+//! error rather than the cryptic `Invalid Option: --binary` that
+//! Verilator itself emits.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
 use crate::backend::BackendError;
 use crate::cache::{cache_dir, BuildCacheKey};
@@ -33,54 +41,131 @@ fn install_hint() -> &'static str {
     }
 }
 
-/// Locate the verilator binary on PATH.
-fn locate() -> Result<PathBuf, BackendError> {
-    let path_var = std::env::var_os("PATH").ok_or_else(|| BackendError::BinaryNotFound {
-        tool: TOOL_NAME.to_string(),
-        install_hint: install_hint().to_string(),
-    })?;
-    for dir in std::env::split_paths(&path_var) {
-        let candidate = dir.join(TOOL_NAME);
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
+/// Major.minor pair parsed from `verilator --version` output.
+/// Verilator's versioning is `<major>.<minor>` (e.g. `5.022`); patch
+/// numbers are not used. Stored as a tuple so version comparisons work
+/// without depending on `semver` here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct VerilatorVersion {
+    major: u32,
+    minor: u32,
+}
+
+impl VerilatorVersion {
+    /// `--main` was added in 4.218, `--build` in 4.034. Both are
+    /// required for the older fallback.
+    fn supports_main_exe_build(self) -> bool {
+        (self.major, self.minor) >= (4, 218)
     }
-    Err(BackendError::BinaryNotFound {
-        tool: TOOL_NAME.to_string(),
-        install_hint: install_hint().to_string(),
+
+    /// `--binary` was added in 4.220 as shorthand for
+    /// `--main --exe --build`.
+    fn supports_binary(self) -> bool {
+        (self.major, self.minor) >= (4, 220)
+    }
+}
+
+/// `verilator --version` output once we've decided which flag set
+/// to use. Cached for the process lifetime so we don't re-spawn
+/// `verilator --version` on every test in a sweep.
+static VERILATOR_VERSION: OnceLock<Option<VerilatorVersion>> = OnceLock::new();
+
+/// Probe `verilator --version` and parse the leading `X.YYY`. Returns
+/// `None` if the binary can't be invoked or its output isn't
+/// recognisable, which falls through to whatever flag set the caller
+/// chose (we still try `--binary` first when version is unknown to
+/// preserve old behaviour).
+fn probe_version(verilator: &Path) -> Option<VerilatorVersion> {
+    *VERILATOR_VERSION.get_or_init(|| {
+        let output = Command::new(verilator)
+            .arg("--version")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .ok()?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        // Expected: "Verilator 5.022 2024-01-08 rev v5.022\n".
+        // Extract the second whitespace-separated token, then split on '.'.
+        let token = text.split_whitespace().nth(1)?;
+        let mut parts = token.split('.');
+        let major: u32 = parts.next()?.parse().ok()?;
+        let minor: u32 = parts.next()?.parse().ok()?;
+        Some(VerilatorVersion { major, minor })
     })
 }
 
-/// Compile `plan` with Verilator, caching the result under
-/// `<project_root>/target/kiln/<hash>/`.
-pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
-    let key = BuildCacheKey::for_plan(plan).map_err(|source| BackendError::Io {
-        path: PathBuf::new(),
-        source,
-    })?;
-    let dir = cache_dir(&plan.project_root, &key);
-    let binary_path = dir.join(format!("V{}", plan.top));
+/// Which "produce an executable" flag set to give Verilator. Modern
+/// installs accept the single `--binary` shorthand; older ones need
+/// the explicit triple `--main --exe --build`.
+#[derive(Debug, Clone, Copy)]
+enum CompileMode {
+    /// Pick based on `verilator --version`; default to `--binary` when
+    /// the version cannot be parsed.
+    Auto,
+    /// Force the older fallback. Used by the runtime retry when Auto
+    /// chose `--binary` but Verilator rejected it.
+    MainExeBuild,
+}
 
-    if binary_path.is_file() {
-        tracing::debug!(target: "kiln-build", path = %binary_path.display(), "verilator cache hit");
-        return Ok(VerilatorOutcome {
-            diagnostics: Vec::new(),
-            binary: Some(binary_path),
-            cache_hit: true,
-            exit_code: Some(0),
-        });
+/// Append the executable-mode flag(s) for `mode` to `cmd`. Returns the
+/// set of flags actually added so error messages can report what
+/// was tried.
+fn add_compile_mode_flags(
+    cmd: &mut Command,
+    verilator: &Path,
+    mode: CompileMode,
+) -> Result<&'static str, BackendError> {
+    match mode {
+        CompileMode::MainExeBuild => {
+            cmd.arg("--main").arg("--exe").arg("--build");
+            Ok("--main --exe --build")
+        }
+        CompileMode::Auto => {
+            let version = probe_version(verilator);
+            match version {
+                Some(v) if v.supports_binary() => {
+                    cmd.arg("--binary");
+                    Ok("--binary")
+                }
+                Some(v) if v.supports_main_exe_build() => {
+                    cmd.arg("--main").arg("--exe").arg("--build");
+                    Ok("--main --exe --build")
+                }
+                Some(v) => Err(BackendError::NonZero {
+                    tool: TOOL_NAME.to_string(),
+                    code: 1,
+                    stderr_tail: format!(
+                        "Verilator {}.{:03} is too old for kiln; need ≥ 4.218 \
+                         (--main --exe --build) or ≥ 4.220 (--binary). \
+                         Upgrade verilator and retry.",
+                        v.major, v.minor
+                    ),
+                }),
+                // Unknown version: try --binary; the runtime retry in
+                // `compile()` switches to MainExeBuild if Verilator
+                // rejects --binary.
+                None => {
+                    cmd.arg("--binary");
+                    Ok("--binary")
+                }
+            }
+        }
     }
+}
 
-    std::fs::create_dir_all(&dir).map_err(|source| BackendError::Io {
-        path: dir.clone(),
-        source,
-    })?;
-
-    let verilator = locate()?;
-    let mut cmd = Command::new(&verilator);
-    cmd.current_dir(&dir);
-    cmd.arg("--binary")
-        .arg("--top-module")
+/// Build the full Verilator command for a plan, including every flag,
+/// define, include, library, and source. Caller spawns it.
+fn build_command(
+    verilator: &Path,
+    dir: &Path,
+    plan: &BuildPlan,
+    mode: CompileMode,
+) -> Result<Command, BackendError> {
+    let mut cmd = Command::new(verilator);
+    cmd.current_dir(dir);
+    let _flags = add_compile_mode_flags(&mut cmd, verilator, mode)?;
+    cmd.arg("--top-module")
         .arg(&plan.top)
         .arg("--sv")
         .arg("--Mdir")
@@ -127,7 +212,17 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
     for src in &plan.sources {
         cmd.arg(src);
     }
+    Ok(cmd)
+}
 
+/// Spawn `verilator` with `mode` and return (stdout, stderr, exit).
+fn run_verilator(
+    verilator: &Path,
+    dir: &Path,
+    plan: &BuildPlan,
+    mode: CompileMode,
+) -> Result<(String, String, Option<i32>), BackendError> {
+    let mut cmd = build_command(verilator, dir, plan, mode)?;
     let output = cmd
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -135,12 +230,80 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
         .output()
         .map_err(|source| BackendError::Invocation {
             tool: TOOL_NAME.to_string(),
-            path: verilator.clone(),
+            path: verilator.to_path_buf(),
             source,
         })?;
-    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    let exit_code = output.status.code();
+    Ok((
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+        output.status.code(),
+    ))
+}
+
+/// Locate the verilator binary on PATH.
+fn locate() -> Result<PathBuf, BackendError> {
+    let path_var = std::env::var_os("PATH").ok_or_else(|| BackendError::BinaryNotFound {
+        tool: TOOL_NAME.to_string(),
+        install_hint: install_hint().to_string(),
+    })?;
+    for dir in std::env::split_paths(&path_var) {
+        let candidate = dir.join(TOOL_NAME);
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+    Err(BackendError::BinaryNotFound {
+        tool: TOOL_NAME.to_string(),
+        install_hint: install_hint().to_string(),
+    })
+}
+
+/// Compile `plan` with Verilator, caching the result under
+/// `<project_root>/target/kiln/<hash>/`.
+pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
+    let key = BuildCacheKey::for_plan(plan).map_err(|source| BackendError::Io {
+        path: PathBuf::new(),
+        source,
+    })?;
+    let dir = cache_dir(&plan.project_root, &key);
+    let binary_path = dir.join(format!("V{}", plan.top));
+
+    if binary_path.is_file() {
+        tracing::debug!(target: "kiln-build", path = %binary_path.display(), "verilator cache hit");
+        return Ok(VerilatorOutcome {
+            diagnostics: Vec::new(),
+            binary: Some(binary_path),
+            cache_hit: true,
+            exit_code: Some(0),
+        });
+    }
+
+    std::fs::create_dir_all(&dir).map_err(|source| BackendError::Io {
+        path: dir.clone(),
+        source,
+    })?;
+
+    let verilator = locate()?;
+
+    // First attempt uses the version-detected mode (which falls back
+    // to `--binary` when version is unknown so existing behaviour
+    // doesn't change for users on modern Verilator).
+    let (mut stdout, mut stderr, mut exit_code) =
+        run_verilator(&verilator, &dir, plan, CompileMode::Auto)?;
+
+    // Older Verilators on lab machines reject `--binary` outright with
+    // `Error: Invalid Option: --binary`. We didn't catch those at
+    // version-probe time (e.g. probe failed). Retry once with the
+    // explicit older flag set.
+    if stderr.contains("Invalid Option: --binary")
+        || stdout.contains("Invalid Option: --binary")
+    {
+        let (s_out, s_err, code) =
+            run_verilator(&verilator, &dir, plan, CompileMode::MainExeBuild)?;
+        stdout = s_out;
+        stderr = s_err;
+        exit_code = code;
+    }
 
     // Verilator emits diagnostics to *both* stdout and stderr depending on
     // version. Parse both, dedupe by (file, line, col, message).
