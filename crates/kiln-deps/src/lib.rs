@@ -17,6 +17,35 @@ use std::path::{Path, PathBuf};
 
 use kiln_core::Manifest;
 
+/// CI-determinism mode for dependency resolution.
+///
+/// - [`Free`](LockMode::Free) (default): mutate `Kiln.lock` as needed.
+/// - [`Locked`](LockMode::Locked): error if a refresh would change
+///   `Kiln.lock`. The pre-existing lockfile is restored on detection.
+/// - [`Frozen`](LockMode::Frozen): implies `Locked` and additionally
+///   refuses to run `bender update`. The existing `Kiln.lock` /
+///   `Bender.lock` are used as-is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LockMode {
+    #[default]
+    Free,
+    Locked,
+    Frozen,
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error(
+    "lockfile drift: `Kiln.lock` would change to match `Kiln.toml`. \
+     Run `kiln update` and commit the result, or drop `--locked` / `--frozen`."
+)]
+pub struct LockDriftError;
+
+impl From<LockDriftError> for BenderError {
+    fn from(_: LockDriftError) -> Self {
+        BenderError::LockDrift
+    }
+}
+
 /// Synchronise dependencies: write a generated `Bender.yml`, run
 /// `bender update`, and copy the resulting `Bender.lock` to
 /// `<project_root>/Kiln.lock`.
@@ -49,15 +78,90 @@ pub fn update(project_root: &Path, manifest: &Manifest) -> Result<(), BenderErro
 /// Resolve the dependency graph and return the per-package source list.
 /// Runs `bender update` first so the lockfile is consistent.
 pub fn resolve(project_root: &Path, manifest: &Manifest) -> Result<ResolvedSources, BenderError> {
-    update(project_root, manifest)?;
+    resolve_with_mode(project_root, manifest, LockMode::Free)
+}
+
+/// Like [`resolve`] but honours a [`LockMode`] for CI determinism.
+///
+/// - `Free`: behaves exactly like [`resolve`].
+/// - `Locked`: snapshots `Kiln.lock`, runs `update`, errors on any
+///   change. Restores the original lock contents if drift is detected.
+/// - `Frozen`: skips `update` entirely; uses the existing lockfile.
+///   Errors if no `Kiln.lock` exists.
+pub fn resolve_with_mode(
+    project_root: &Path,
+    manifest: &Manifest,
+    mode: LockMode,
+) -> Result<ResolvedSources, BenderError> {
+    update_with_mode(project_root, manifest, mode)?;
     let bender_dir = bender_dir(project_root);
     let output = runner::run_bender_capture(&bender_dir, &["sources", "--flatten"])?;
     sources::parse(&output.stdout)
 }
 
+/// Like [`update`] but honours a [`LockMode`].
+pub fn update_with_mode(
+    project_root: &Path,
+    manifest: &Manifest,
+    mode: LockMode,
+) -> Result<(), BenderError> {
+    match mode {
+        LockMode::Free => update(project_root, manifest),
+        LockMode::Locked => {
+            let kiln_lock = project_root.join("Kiln.lock");
+            let before = std::fs::read_to_string(&kiln_lock).ok();
+            update(project_root, manifest)?;
+            let after = std::fs::read_to_string(&kiln_lock).ok();
+            if before != after {
+                if let Some(prev) = before {
+                    let _ = std::fs::write(&kiln_lock, prev);
+                }
+                return Err(BenderError::LockDrift);
+            }
+            Ok(())
+        }
+        LockMode::Frozen => {
+            let kiln_lock = project_root.join("Kiln.lock");
+            if !kiln_lock.is_file() && !manifest.dependencies.is_empty() {
+                return Err(BenderError::FrozenWithoutLock { path: kiln_lock });
+            }
+            // Make sure Bender.yml + Bender.lock are in place so
+            // `bender sources` works without going to the network.
+            let bender_dir = bender_dir(project_root);
+            std::fs::create_dir_all(&bender_dir).map_err(|source| BenderError::Io {
+                path: bender_dir.clone(),
+                source,
+            })?;
+            let bender_yml = generate_bender_yml(manifest, project_root)?;
+            let yml_path = bender_dir.join("Bender.yml");
+            std::fs::write(&yml_path, bender_yml).map_err(|source| BenderError::Io {
+                path: yml_path,
+                source,
+            })?;
+            if kiln_lock.is_file() {
+                let bender_lock = bender_dir.join("Bender.lock");
+                std::fs::copy(&kiln_lock, &bender_lock).map_err(|source| BenderError::Io {
+                    path: bender_lock,
+                    source,
+                })?;
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Return a stable, snapshot-friendly textual dependency tree.
 pub fn tree(project_root: &Path, manifest: &Manifest) -> Result<String, BenderError> {
-    update(project_root, manifest)?;
+    tree_with_mode(project_root, manifest, LockMode::Free)
+}
+
+/// Like [`tree`] but honours a [`LockMode`].
+pub fn tree_with_mode(
+    project_root: &Path,
+    manifest: &Manifest,
+    mode: LockMode,
+) -> Result<String, BenderError> {
+    update_with_mode(project_root, manifest, mode)?;
     let bender_dir = bender_dir(project_root);
     let output = runner::run_bender_capture(&bender_dir, &["packages"])?;
     Ok(output.stdout)
