@@ -43,6 +43,18 @@ pub enum BenderError {
 
     #[error(transparent)]
     Manifest(#[from] ManifestError),
+
+    #[error(
+        "lockfile drift: `Kiln.lock` would change to match `Kiln.toml`. \
+         Run `kiln update` and commit the result, or drop `--locked` / `--frozen`."
+    )]
+    LockDrift,
+
+    #[error(
+        "`--frozen` forbids dependency resolution; \
+         existing `Kiln.lock` not found at {path}"
+    )]
+    FrozenWithoutLock { path: PathBuf },
 }
 
 pub(crate) struct RunOutput {

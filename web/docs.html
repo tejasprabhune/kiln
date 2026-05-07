@@ -61,6 +61,56 @@ kiln doctor   <span class="comment"># env probe + project sanity checks</span></
   <pre><code>kiln env       <span class="comment"># tools + versions only</span>
 kiln doctor    <span class="comment"># tools + project-level health</span></code></pre>
 
+  <h3>Edit-test loop with <code>kiln watch</code></h3>
+  <p>
+    <code>kiln watch</code> watches the project tree (excluding
+    <code>target/</code> and <code>.git/</code>) and re-runs a
+    subcommand on every relevant change, debounced 200 ms so a single
+    editor save fires once. It runs the subcommand once immediately so
+    you see current state without waiting for an edit.
+  </p>
+  <pre><code>kiln watch check          <span class="comment"># fast slang elaboration on every save</span>
+kiln watch test           <span class="comment"># full test sweep</span>
+kiln watch test alu mul   <span class="comment"># filter to substring matches</span>
+kiln watch build          <span class="comment"># rebuild via verilator</span>
+kiln watch fmt            <span class="comment"># `kiln fmt --check` (CI gate)</span></code></pre>
+
+  <h3>CI determinism: <code>--locked</code> and <code>--frozen</code></h3>
+  <p>
+    Two global flags gate dependency resolution against drift, mirroring
+    cargo and uv. <code>--locked</code> errors if a refresh would change
+    <code>Kiln.lock</code>; <code>--frozen</code> implies
+    <code>--locked</code> and additionally refuses to make any network
+    request during dependency resolution.
+  </p>
+  <pre><code>kiln test --locked              <span class="comment"># CI: fail if Kiln.lock drifted from Kiln.toml</span>
+kiln build --frozen             <span class="comment"># CI: also no network; use existing Kiln.lock as-is</span>
+kiln update --locked            <span class="comment"># no-op; verify the lockfile is current</span>
+kiln update --frozen            <span class="comment"># error: contradictory</span></code></pre>
+  <p>
+    Both flags compose with every plan-producing subcommand
+    (<code>build</code>, <code>run</code>, <code>check</code>,
+    <code>test</code>, <code>doc</code>, <code>tree</code>). They also
+    compose with <code>--features</code> and <code>--profile</code>.
+  </p>
+
+  <h3>Test reporters for CI</h3>
+  <p>
+    <code>kiln test --reporter junit</code> writes
+    <code>target/kiln/junit.xml</code> in the de-facto Jenkins / GitLab
+    JUnit XML dialect and suppresses human output. GitHub Actions, GitLab
+    CI, Buildkite, Jenkins, and CircleCI all consume this format directly.
+  </p>
+  <pre><code>kiln test --reporter junit --locked
+<span class="comment"># target/kiln/junit.xml — one &lt;testcase&gt; per discovered test</span></code></pre>
+  <p>
+    Pass <code>-v</code> to also include captured stdout in the XML as
+    <code>&lt;system-out&gt;</code>. Failures and timeouts emit
+    <code>&lt;failure type="failure"&gt;</code> and
+    <code>&lt;failure type="timeout"&gt;</code> respectively, with the
+    captured stderr inside.
+  </p>
+
   <h3>Migrate an existing project</h3>
   <p>
     Run <code>kiln init</code> in the project root. It creates a <code>Kiln.toml</code>

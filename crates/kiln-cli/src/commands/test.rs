@@ -40,6 +40,30 @@ pub struct Args {
     #[allow(dead_code)]
     pub profile: String,
     pub features: FeatureFlags,
+    pub reporter: ReporterKind,
+}
+
+/// Output reporter for `kiln test`. `Human` writes the cargo-style live
+/// progress UI to stderr; `Junit` suppresses human output and writes a
+/// JUnit XML file to `target/kiln/junit.xml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReporterKind {
+    #[default]
+    Human,
+    Junit,
+}
+
+impl std::str::FromStr for ReporterKind {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "human" => Ok(ReporterKind::Human),
+            "junit" => Ok(ReporterKind::Junit),
+            other => Err(format!(
+                "unknown reporter `{other}` (expected `human` or `junit`)"
+            )),
+        }
+    }
 }
 
 pub fn run(args: Args) -> Result<()> {
@@ -103,7 +127,11 @@ fn run_inner(args: Args, manifest: &Manifest, project_root: &Path) -> Result<()>
         SourceSet::resolve(&project_root, &manifest).context("resolving project source set")?;
     if !manifest.dependencies.is_empty() {
         reporter::status("Resolving", "dependencies via bender");
-        let resolved = kiln_deps::resolve(&project_root, &manifest)?;
+        let resolved = kiln_deps::resolve_with_mode(
+            &project_root,
+            &manifest,
+            crate::commands::current_lock_mode(),
+        )?;
         for f in resolved.all_files() {
             if !source_set.files.contains(&f) {
                 source_set.files.push(f);
@@ -123,36 +151,42 @@ fn run_inner(args: Args, manifest: &Manifest, project_root: &Path) -> Result<()>
     }
 
     let trace_effective = args.trace || manifest.wave.enabled_by_default;
+    let junit = args.reporter == ReporterKind::Junit;
 
     let started = Instant::now();
     let filtered_out = total_discovered.saturating_sub(tests.len());
-    reporter::status(
-        "Running",
-        format!(
-            "{} test{} ({} parallel{}{})",
-            tests.len(),
-            if tests.len() == 1 { "" } else { "s" },
-            jobs,
-            if trace_effective {
-                ", with --trace"
-            } else {
-                ""
-            },
-            if filtered_out > 0 {
-                format!(", {filtered_out} filtered")
-            } else {
-                String::new()
-            },
-        ),
-    );
+    if !junit {
+        reporter::status(
+            "Running",
+            format!(
+                "{} test{} ({} parallel{}{})",
+                tests.len(),
+                if tests.len() == 1 { "" } else { "s" },
+                jobs,
+                if trace_effective {
+                    ", with --trace"
+                } else {
+                    ""
+                },
+                if filtered_out > 0 {
+                    format!(", {filtered_out} filtered")
+                } else {
+                    String::new()
+                },
+            ),
+        );
+    }
 
     // Channel: workers send ProgressEvent; this thread renders.
     let (tx, rx) = mpsc::channel::<ProgressEvent>();
     let opts = RunOptions {
         trace: trace_effective,
         nocapture: args.nocapture,
-        progress_tx: Some(tx),
+        // junit suppresses live progress so CI logs aren't doubled by
+        // the renderer + the XML report.
+        progress_tx: if junit { None } else { Some(tx.clone()) },
     };
+    drop(tx);
 
     // Run in a scoped thread so we can render from the main thread.
     let outcomes_thread = std::thread::scope(|scope| -> Vec<_> {
@@ -161,7 +195,12 @@ fn run_inner(args: Args, manifest: &Manifest, project_root: &Path) -> Result<()>
         let ss = &source_set;
         let ts = &tests;
         let handle = scope.spawn(move || run_many_with_options(pr, mf, ss, ts, jobs, &opts));
-        render_progress(rx, &tests, args.no_fail_fast, args.nocapture);
+        if !junit {
+            render_progress(rx, &tests, args.no_fail_fast, args.nocapture);
+        } else {
+            // Drain quietly so the runner doesn't block on a full channel.
+            for _ in rx.iter() {}
+        }
         handle.join().expect("test runner thread")
     });
 
@@ -240,6 +279,61 @@ fn run_inner(args: Args, manifest: &Manifest, project_root: &Path) -> Result<()>
         }) {
             stopped_early = false; // We don't actually stop early today.
         }
+    }
+
+    // Skip the human failure dump in junit mode — the XML carries it.
+    if junit {
+        let cases: Vec<crate::junit::JunitCase> = outcomes_thread
+            .iter()
+            .enumerate()
+            .map(|(i, o)| {
+                let name = tests[i].name.clone();
+                match o {
+                    Ok(t) => crate::junit::JunitCase {
+                        name: t.name.clone(),
+                        classname: manifest.package.name.clone(),
+                        elapsed: t.elapsed,
+                        outcome: match t.status {
+                            Status::Pass => crate::junit::JunitOutcome::Pass,
+                            Status::Fail => crate::junit::JunitOutcome::Fail {
+                                message: format!("test `{}` failed", t.name),
+                                stderr: t.stderr.clone(),
+                            },
+                            Status::Timeout => crate::junit::JunitOutcome::Timeout {
+                                message: format!("test `{}` exceeded wallclock timeout", t.name),
+                                stderr: t.stderr.clone(),
+                            },
+                        },
+                        stdout: t.stdout.clone(),
+                    },
+                    Err(e) => crate::junit::JunitCase {
+                        name,
+                        classname: manifest.package.name.clone(),
+                        elapsed: std::time::Duration::ZERO,
+                        outcome: crate::junit::JunitOutcome::Error {
+                            message: "runner error".into(),
+                            stderr: e.to_string(),
+                        },
+                        stdout: String::new(),
+                    },
+                }
+            })
+            .collect();
+        let xml = crate::junit::render(&manifest.package.name, &cases, args.nocapture);
+        let out_dir = project_root.join("target").join("kiln");
+        let _ = std::fs::create_dir_all(&out_dir);
+        let out_path = out_dir.join("junit.xml");
+        std::fs::write(&out_path, &xml)
+            .with_context(|| format!("writing JUnit XML to {}", out_path.display()))?;
+        let _ = save_last_run(&project_root, &last_run_record);
+        if failed + timed_out + errored > 0 {
+            anyhow::bail!(
+                "{} test(s) failed; report at {}",
+                failed + timed_out + errored,
+                out_path.display()
+            );
+        }
+        return Ok(());
     }
 
     // Failure blocks first (mirrors cargo).
@@ -500,6 +594,7 @@ mod tests {
             trace: false,
             profile: "test".into(),
             features: FeatureFlags::default(),
+            reporter: ReporterKind::Human,
         }
     }
 

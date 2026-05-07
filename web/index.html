@@ -57,7 +57,14 @@ kiln fmt --check           <span class="comment"># exits non-zero if anything ch
 
 <span class="comment"># dependencies via bender</span>
 kiln add axi --git https://github.com/pulp-platform/axi.git --version 0.39
-kiln tree</code></pre>
+kiln tree
+
+<span class="comment"># tight edit-test loop</span>
+kiln watch test           <span class="comment"># re-runs `kiln test` on every save</span>
+
+<span class="comment"># CI</span>
+kiln test --reporter junit --locked    <span class="comment"># JUnit XML to target/kiln/junit.xml</span>
+kiln doctor                            <span class="comment"># env probe + project sanity</span></code></pre>
   </section>
 
   <section>

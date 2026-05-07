@@ -45,7 +45,11 @@ pub fn run_build(
     let mut dep_include_dirs: Vec<std::path::PathBuf> = Vec::new();
     if !manifest.dependencies.is_empty() {
         reporter::status("Resolving", "dependencies via bender");
-        let resolved_srcs: ResolvedSources = kiln_deps::resolve(&project_root, &manifest)?;
+        let resolved_srcs: ResolvedSources = kiln_deps::resolve_with_mode(
+            &project_root,
+            &manifest,
+            crate::commands::current_lock_mode(),
+        )?;
         reporter::debug(
             "Resolved",
             format!(
