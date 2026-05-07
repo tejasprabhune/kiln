@@ -9,10 +9,16 @@ use kiln_core::{find_manifest, Manifest, ResolvedConfig};
 use slang_rs::Slang;
 
 use crate::commands::build::fmt_elapsed;
+use crate::commands::{apply_feature_flags, FeatureFlags};
 use crate::render;
 use crate::reporter;
 
-pub fn run(deny_warnings: bool, verbose: bool, profile_name: &str) -> Result<()> {
+pub fn run(
+    deny_warnings: bool,
+    verbose: bool,
+    profile_name: &str,
+    features: &FeatureFlags,
+) -> Result<()> {
     if verbose {
         unsafe {
             std::env::set_var("KILN_LOG", "debug");
@@ -20,7 +26,8 @@ pub fn run(deny_warnings: bool, verbose: bool, profile_name: &str) -> Result<()>
     }
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;
-    let manifest = Manifest::load(&manifest_path)?;
+    let mut manifest = Manifest::load(&manifest_path)?;
+    apply_feature_flags(&mut manifest, features)?;
     let project_root = manifest_path
         .parent()
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?

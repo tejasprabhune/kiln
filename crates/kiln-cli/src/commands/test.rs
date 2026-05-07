@@ -18,6 +18,7 @@ use kiln_test::{
     LastRunEntry, ProgressEvent, RunOptions, Status,
 };
 
+use crate::commands::{apply_feature_flags, FeatureFlags};
 use crate::reporter;
 
 /// Flat parameter object so the dispatch arm in `commands/mod.rs` stays tidy.
@@ -34,7 +35,9 @@ pub struct Args {
     pub rerun: bool,
     pub skip_passed: bool,
     pub trace: bool,
+    #[allow(dead_code)]
     pub profile: String,
+    pub features: FeatureFlags,
 }
 
 pub fn run(args: Args) -> Result<()> {
@@ -44,7 +47,8 @@ pub fn run(args: Args) -> Result<()> {
         .parent()
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
-    let manifest = Manifest::load(&manifest_path)?;
+    let mut manifest = Manifest::load(&manifest_path)?;
+    apply_feature_flags(&mut manifest, &args.features)?;
 
     let all_tests = discover(&project_root, &manifest)?;
     let total_discovered = all_tests.len();
@@ -114,7 +118,11 @@ pub fn run(args: Args) -> Result<()> {
             tests.len(),
             if tests.len() == 1 { "" } else { "s" },
             jobs,
-            if trace_effective { ", with --trace" } else { "" },
+            if trace_effective {
+                ", with --trace"
+            } else {
+                ""
+            },
             if filtered_out > 0 {
                 format!(", {filtered_out} filtered")
             } else {
@@ -171,13 +179,21 @@ pub fn run(args: Args) -> Result<()> {
                     Status::Fail => {
                         failed += 1;
                         if !args.nocapture {
-                            failure_blocks.push((t.name.clone(), t.stdout.clone(), t.stderr.clone()));
+                            failure_blocks.push((
+                                t.name.clone(),
+                                t.stdout.clone(),
+                                t.stderr.clone(),
+                            ));
                         }
                     }
                     Status::Timeout => {
                         timed_out += 1;
                         if !args.nocapture {
-                            failure_blocks.push((t.name.clone(), t.stdout.clone(), t.stderr.clone()));
+                            failure_blocks.push((
+                                t.name.clone(),
+                                t.stdout.clone(),
+                                t.stderr.clone(),
+                            ));
                         }
                     }
                 }
@@ -407,12 +423,7 @@ fn write_ticker(in_flight: &[String], finished: usize, total: usize, builds_done
     let phase = if builds_done { "Running" } else { "Building" };
     let snapshot: Vec<&str> = in_flight.iter().take(4).map(|s| s.as_str()).collect();
     let extra = in_flight.len().saturating_sub(snapshot.len());
-    let mut s = format!(
-        "    {} {}/{}",
-        reporter::dim(phase),
-        finished,
-        total,
-    );
+    let mut s = format!("    {} {}/{}", reporter::dim(phase), finished, total,);
     if !snapshot.is_empty() {
         s.push_str(" — ");
         s.push_str(&snapshot.join(", "));
@@ -458,12 +469,7 @@ mod tests {
         }
     }
 
-    fn args(
-        filters: &[&str],
-        skip: &[&str],
-        tag: &[&str],
-        exact: bool,
-    ) -> Args {
+    fn args(filters: &[&str], skip: &[&str], tag: &[&str], exact: bool) -> Args {
         Args {
             filters: filters.iter().map(|s| s.to_string()).collect(),
             exact,
@@ -478,6 +484,7 @@ mod tests {
             skip_passed: false,
             trace: false,
             profile: "test".into(),
+            features: FeatureFlags::default(),
         }
     }
 
@@ -566,4 +573,3 @@ mod tests {
         assert_eq!(names, vec!["b", "c"]);
     }
 }
-

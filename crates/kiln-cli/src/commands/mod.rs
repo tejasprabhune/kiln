@@ -1,7 +1,42 @@
 use std::path::PathBuf;
 
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
+
+/// Resolve a feature selection from CLI flags against a manifest, then apply
+/// it to the design (mutating `manifest.design.defines` and
+/// `manifest.design.sources`). Centralised so every subcommand handles
+/// features the same way.
+pub fn apply_feature_flags(manifest: &mut kiln_core::Manifest, flags: &FeatureFlags) -> Result<()> {
+    let selection = kiln_core::FeatureSelection::resolve(
+        &manifest.features,
+        &flags.features,
+        flags.all_features,
+        flags.no_default_features,
+    )?;
+    let mut design = manifest.design.clone();
+    manifest.apply_features(&mut design, &selection);
+    manifest.design = design;
+    Ok(())
+}
+
+/// Cargo-style feature selection flags. Reused by every subcommand that
+/// produces a `BuildPlan` (build, run, check, test, doc).
+#[derive(Debug, Clone, Args, Default)]
+pub struct FeatureFlags {
+    /// Comma- or space-separated list of features to activate. Adds to
+    /// the default set unless `--no-default-features` is also passed.
+    #[arg(long = "features", value_delimiter = ',', value_name = "FEATURES")]
+    pub features: Vec<String>,
+
+    /// Activate every feature defined in `[features]`.
+    #[arg(long, conflicts_with = "no_default_features")]
+    pub all_features: bool,
+
+    /// Do not activate the `default` feature set.
+    #[arg(long)]
+    pub no_default_features: bool,
+}
 
 mod build;
 mod check;
@@ -69,6 +104,8 @@ enum Command {
         /// Build profile to use. Defaults to `dev`.
         #[arg(long, default_value = "dev")]
         profile: String,
+        #[command(flatten)]
+        features: FeatureFlags,
     },
 
     /// Build the design with Verilator.
@@ -82,6 +119,8 @@ enum Command {
         /// Verbose tracing.
         #[arg(short, long)]
         verbose: bool,
+        #[command(flatten)]
+        features: FeatureFlags,
     },
 
     /// Build and run the simulator binary. Args after `--` are forwarded.
@@ -94,6 +133,8 @@ enum Command {
         profile: String,
         #[arg(short, long)]
         verbose: bool,
+        #[command(flatten)]
+        features: FeatureFlags,
         /// Arguments forwarded to the simulator binary after `--`.
         #[arg(last = true)]
         args: Vec<String>,
@@ -186,6 +227,8 @@ enum Command {
         /// Build profile to use. Defaults to `test`.
         #[arg(long, default_value = "test")]
         profile: String,
+        #[command(flatten)]
+        features: FeatureFlags,
     },
 
     /// Generate a static documentation site under `target/doc/`.
@@ -196,6 +239,8 @@ enum Command {
         /// Build profile to use. Defaults to `dev`.
         #[arg(long, default_value = "dev")]
         profile: String,
+        #[command(flatten)]
+        features: FeatureFlags,
     },
 
     /// Inspect and query lint rules.
@@ -265,23 +310,26 @@ impl Cli {
                 deny_warnings,
                 verbose,
                 profile,
-            } => check::run(deny_warnings, verbose, &profile),
+                features,
+            } => check::run(deny_warnings, verbose, &profile, &features),
             Command::Build {
                 release,
                 profile,
                 verbose,
+                features,
             } => {
                 let profile = if release {
                     "release".to_string()
                 } else {
                     profile
                 };
-                build::run_build(&profile, verbose).map(|_| ())
+                build::run_build(&profile, verbose, &features).map(|_| ())
             }
             Command::Run {
                 release,
                 profile,
                 verbose,
+                features,
                 args,
             } => {
                 let profile = if release {
@@ -289,7 +337,7 @@ impl Cli {
                 } else {
                     profile
                 };
-                build::run_run(&profile, verbose, args)
+                build::run_run(&profile, verbose, &features, args)
             }
             Command::Clean => build::run_clean(),
             Command::Add {
@@ -324,6 +372,7 @@ impl Cli {
                 skip_passed,
                 trace,
                 profile,
+                features,
             } => test::run(test::Args {
                 filters,
                 exact,
@@ -338,8 +387,13 @@ impl Cli {
                 skip_passed,
                 trace,
                 profile,
+                features,
             }),
-            Command::Doc { open, profile } => doc::run(open, &profile),
+            Command::Doc {
+                open,
+                profile,
+                features,
+            } => doc::run(open, &profile, &features),
             Command::Lint { subcommand } => match subcommand {
                 LintSubcommand::List => lint::run_list(),
                 LintSubcommand::Explain { name } => lint::run_explain(&name),

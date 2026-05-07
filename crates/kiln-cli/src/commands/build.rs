@@ -12,18 +12,24 @@ use kiln_core::ResolvedConfig;
 use kiln_core::{find_manifest, Manifest};
 use kiln_deps::ResolvedSources;
 
+use crate::commands::{apply_feature_flags, FeatureFlags};
 use crate::render;
 use crate::reporter;
 
-pub fn run_build(profile_name: &str, verbose: bool) -> Result<BuildArtifacts> {
+pub fn run_build(
+    profile_name: &str,
+    verbose: bool,
+    features: &FeatureFlags,
+) -> Result<BuildArtifacts> {
     if verbose {
         bump_log_level();
     }
     let started = Instant::now();
     let project_root = current_project_root()?;
     let manifest_path = find_manifest(&project_root)?;
-    let manifest = Manifest::load(&manifest_path)
+    let mut manifest = Manifest::load(&manifest_path)
         .with_context(|| format!("loading manifest from {}", manifest_path.display()))?;
+    apply_feature_flags(&mut manifest, features)?;
 
     let project_root = manifest_path
         .parent()
@@ -117,8 +123,13 @@ pub fn run_build(profile_name: &str, verbose: bool) -> Result<BuildArtifacts> {
     })
 }
 
-pub fn run_run(profile_name: &str, verbose: bool, forwarded: Vec<String>) -> Result<()> {
-    let artifacts = run_build(profile_name, verbose)?;
+pub fn run_run(
+    profile_name: &str,
+    verbose: bool,
+    features: &FeatureFlags,
+    forwarded: Vec<String>,
+) -> Result<()> {
+    let artifacts = run_build(profile_name, verbose, features)?;
     reporter::status(
         "Running",
         format!(

@@ -119,15 +119,15 @@ pub fn discover(
     project_root: &Path,
     manifest: &Manifest,
 ) -> Result<Vec<DiscoveredTest>, TestError> {
-    let default_detect = manifest
-        .test
-        .detect
-        .clone()
-        .unwrap_or(Detect::ExitCode);
+    let default_detect = manifest.test.detect.clone().unwrap_or(Detect::ExitCode);
     let default_timeout = manifest.test.timeout.map(|d| d.as_duration());
 
     let mut base: Vec<DiscoveredTest> = if manifest.design.test_sources.is_empty() {
-        discover_dir(&project_root.join("tests"), &default_detect, default_timeout)?
+        discover_dir(
+            &project_root.join("tests"),
+            &default_detect,
+            default_timeout,
+        )?
     } else {
         let mut out = Vec::new();
         for pattern in &manifest.design.test_sources {
@@ -187,10 +187,7 @@ pub fn discover(
             .detect
             .clone()
             .unwrap_or_else(|| default_detect.clone());
-        let timeout = case
-            .timeout
-            .map(|d| d.as_duration())
-            .or(default_timeout);
+        let timeout = case.timeout.map(|d| d.as_duration()).or(default_timeout);
         base.push(DiscoveredTest {
             name: case.name.clone(),
             source: source.clone(),
@@ -240,10 +237,7 @@ fn expand_matrix(
         .detect
         .clone()
         .unwrap_or_else(|| default_detect.clone());
-    let timeout = matrix
-        .timeout
-        .map(|d| d.as_duration())
-        .or(default_timeout);
+    let timeout = matrix.timeout.map(|d| d.as_duration()).or(default_timeout);
     let mut matches: Vec<PathBuf> = paths.flatten().collect();
     matches.sort();
     for path in matches {
@@ -416,7 +410,13 @@ pub fn run_one(
     base_source_set: &SourceSet,
     test: &DiscoveredTest,
 ) -> Result<TestOutcome, TestError> {
-    run_one_with_options(project_root, manifest, base_source_set, test, &RunOptions::default())
+    run_one_with_options(
+        project_root,
+        manifest,
+        base_source_set,
+        test,
+        &RunOptions::default(),
+    )
 }
 
 /// Build (or reuse cached binary) and run one test.
@@ -796,7 +796,14 @@ pub fn run_many(
     tests: &[DiscoveredTest],
     jobs: usize,
 ) -> Vec<Result<TestOutcome, TestError>> {
-    run_many_with_options(project_root, manifest, source_set, tests, jobs, &RunOptions::default())
+    run_many_with_options(
+        project_root,
+        manifest,
+        source_set,
+        tests,
+        jobs,
+        &RunOptions::default(),
+    )
 }
 
 /// Run a slice of tests in parallel, with `RunOptions` propagated.
@@ -1076,14 +1083,8 @@ mod tests {
             classify(&d, Some(0), "blah\n[PASS]\n[failed]"),
             Status::Fail
         );
-        assert_eq!(
-            classify(&d, Some(0), "no marker here"),
-            Status::Fail
-        );
-        assert_eq!(
-            classify(&d, Some(0), "[PASS]\nTimeout!"),
-            Status::Fail
-        );
+        assert_eq!(classify(&d, Some(0), "no marker here"), Status::Fail);
+        assert_eq!(classify(&d, Some(0), "[PASS]\nTimeout!"), Status::Fail);
     }
 
     #[test]
@@ -1107,14 +1108,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         // Set up testbench
         std::fs::create_dir_all(tmp.path().join("tests")).unwrap();
-        std::fs::write(tmp.path().join("tests/foo_tb.sv"), "module foo_tb; endmodule")
-            .unwrap();
+        std::fs::write(
+            tmp.path().join("tests/foo_tb.sv"),
+            "module foo_tb; endmodule",
+        )
+        .unwrap();
         // Fixtures
         std::fs::create_dir_all(tmp.path().join("data")).unwrap();
         std::fs::write(tmp.path().join("data/a.hex"), "").unwrap();
         std::fs::write(tmp.path().join("data/b.hex"), "").unwrap();
-        let toml = format!(
-            r#"
+        let toml = r#"
             [package]
             name = "demo"
             version = "0.1.0"
@@ -1126,9 +1129,8 @@ mod tests {
             testbench = "foo_tb"
             inputs = "data/*.hex"
             name_prefix = "case_"
-            args = ["+hex_file={{stem}}"]
-            "#,
-        );
+            args = ["+hex_file={stem}"]
+            "#;
         let _ = toml; // silence if unused
         let m: Manifest = r#"
             [package]

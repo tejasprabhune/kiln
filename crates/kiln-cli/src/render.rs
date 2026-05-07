@@ -1,6 +1,6 @@
 //! Render `BuildDiagnostic`s for the terminal using ariadne.
 
-use kiln_build::{BuildDiagnostic, Severity};
+use kiln_build::BuildDiagnostic;
 
 pub fn render(diags: &[BuildDiagnostic]) -> String {
     kiln_build::render::format_diagnostics(diags)
@@ -9,6 +9,7 @@ pub fn render(diags: &[BuildDiagnostic]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kiln_build::Severity;
     use std::path::PathBuf;
 
     #[test]
