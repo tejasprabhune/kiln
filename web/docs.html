@@ -47,7 +47,19 @@ kiln install-tools --build-from-source</code></pre>
 cd counter
 kiln check    <span class="comment"># elaboration via slang</span>
 kiln build    <span class="comment"># compile via verilator</span>
-kiln test     <span class="comment"># run testbenches under tests/</span></code></pre>
+kiln test     <span class="comment"># run testbenches under tests/</span>
+kiln doctor   <span class="comment"># env probe + project sanity checks</span></code></pre>
+
+  <h3>Verify your environment</h3>
+  <p>
+    <code>kiln env</code> prints every external tool kiln drives, the
+    version it found, and where it lives on PATH. <code>kiln doctor</code>
+    runs the same probe and additionally validates your manifest, lockfile,
+    vendor source globs, and firmware paths. Useful for filing bug reports
+    and diagnosing CI environments.
+  </p>
+  <pre><code>kiln env       <span class="comment"># tools + versions only</span>
+kiln doctor    <span class="comment"># tools + project-level health</span></code></pre>
 
   <h3>Migrate an existing project</h3>
   <p>
