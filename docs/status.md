@@ -3,6 +3,72 @@
 > Living status doc. Each session that ships milestone work appends a section
 > below. The most recent section is the current state.
 
+## 2026-05-07 — M12 (Operational tooling: watch, JUnit, frozen/locked)
+
+**Branch:** `milestone/m12-operational-tooling`
+**ADR:** `docs/decisions/0007-operational-tooling-m12.md`
+
+### Summary
+
+Cargo/uv-shaped operational ergonomics. Three additions, each with its
+own escape hatch:
+
+- `kiln watch <subcommand>` — watches the project tree (excluding
+  `target/`, `.git/`, etc.), debounces 200 ms, re-runs the subcommand
+  on every relevant change. Subcommand failures keep the loop going,
+  same as `cargo watch`. Runs once immediately so current state is
+  visible without an edit.
+- `kiln test --reporter junit` — writes
+  `target/kiln/junit.xml` in the de-facto Jenkins/GitLab dialect and
+  suppresses human output. GitHub Actions, GitLab CI, Buildkite,
+  Jenkins, and CircleCI consume the format directly. Pass `-v` to
+  include captured stdout as `<system-out>`.
+- `--locked` / `--frozen` — global flags accepted by every
+  plan-producing subcommand (`build`, `run`, `check`, `test`, `doc`,
+  `tree`, `update`). `--locked` errors if a refresh would change
+  `Kiln.lock`; `--frozen` implies `--locked` plus refuses any network
+  request during dep resolution. `kiln update --locked` is a no-op;
+  `kiln update --frozen` errors as contradictory.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+| --------- | ------ | -------- |
+| `kiln watch` filters events to relevant extensions and skips `target/`/`.git/` | pass | `crates/kiln-cli/src/commands/watch.rs` `should_trigger_*` tests |
+| `kiln test --reporter junit` writes a well-formed XML doc | pass | smoke against `examples/hello-counter` produced a valid `target/kiln/junit.xml` |
+| JUnit emitter escapes XML predefined entities and strips control chars | pass | `crates/kiln-cli/src/junit.rs` `xml_special_chars_in_messages_are_escaped`, `control_chars_stripped` |
+| Pass / fail / timeout / runner-error map to distinct outcome shapes | pass | `pass_renders_self_closing_testcase`, `fail_includes_failure_element_with_stderr`, `timeout_uses_distinct_failure_type` |
+| `time` aggregates correctly at the suite level | pass | `time_aggregates_at_the_suite_level` |
+| `--locked` / `--frozen` plumb through every plan-producing command | pass | clap-level test via `kiln --help`; manual smoke against examples |
+| `--frozen` errors when no `Kiln.lock` exists with deps declared | pass | `BenderError::FrozenWithoutLock` |
+| `--locked` restores original lockfile contents if drift is detected | pass | `update_with_mode` Locked branch (LockDriftError) |
+
+### ADRs filed
+
+- `docs/decisions/0007-operational-tooling-m12.md` — **accepted**.
+  Documents scope plus explicit out-of-scope items (TAP/TeamCity/Bazel
+  reporters, full `cargo-watch`-style command DSL, `--format json`
+  for non-test commands, multi-simulator backend abstraction).
+
+### Backlog (still deferred)
+
+Carried forward from M11; this milestone closed JUnit + watch +
+frozen/locked. Remaining audit items:
+
+- `--format json` for `kiln check`, `kiln build`, `kiln tree`. The big
+  one — needs schema design and `docs/json-output.md` expansion.
+- Workspaces (multi-package).
+- `kiln check --fix` for autofixable lints.
+- `kiln-toolchain.toml` for pinning slang/verilator/verible.
+- `kiln init --import-filelist verilator.f`,
+  `kiln new --template <fpga-zynq | uvm | riscv-soc>`.
+- `kiln package` reproducible bug bundle.
+- VS Code extension.
+- Multi-simulator backend abstraction (VCS / Xcelium / Questa / icarus).
+- `kiln self update`.
+- `kiln firmware build <name>` / `kiln firmware list`.
+- Per-vendor sim/synth source split when a synthesis backend lands.
+
 ## 2026-05-06 — M11 (Vendor / firmware / hooks + doctor)
 
 **Branch:** `milestone/m11-vendor-firmware-hooks`
