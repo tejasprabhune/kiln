@@ -208,8 +208,9 @@ enum Command {
         #[arg(long)]
         list: bool,
         /// Stream simulation output to the terminal in real time.
-        /// Requires --jobs 1. Alias of --verbose.
-        #[arg(long, alias = "verbose", short = 'v')]
+        /// Requires --jobs 1. Use the global `-v` / `--verbose` flag
+        /// to also bump log level on top of streaming.
+        #[arg(long)]
         nocapture: bool,
         /// Print stdout for passing tests too, not just failing ones.
         #[arg(long)]
