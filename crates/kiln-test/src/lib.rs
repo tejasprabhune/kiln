@@ -516,6 +516,74 @@ pub fn run_one_with_options(
     }
 }
 
+/// Run every `[[firmware]]` block declared in `manifest` once, deduped
+/// by the resolved `(path, build)` pair. Errors are returned keyed by
+/// firmware `name` so callers can surface them next to test results.
+///
+/// Each command is executed inside `manifest.firmware[i].path`
+/// (relative to `project_root`) using the system shell.
+pub fn run_firmware_builds(project_root: &Path, manifest: &Manifest) -> BTreeMap<String, String> {
+    let mut errors: BTreeMap<String, String> = BTreeMap::new();
+    let mut seen: HashSet<(PathBuf, String)> = HashSet::new();
+    for fw in &manifest.firmware {
+        let key = (fw.path.clone(), fw.build.clone());
+        if !seen.insert(key) {
+            continue;
+        }
+        let cwd = project_root.join(&fw.path);
+        tracing::debug!(
+            target: "kiln-test",
+            firmware = %fw.name,
+            path = %cwd.display(),
+            cmd = %fw.build,
+            "building firmware"
+        );
+        let output = Command::new("sh")
+            .arg("-c")
+            .arg(&fw.build)
+            .current_dir(&cwd)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output();
+        match output {
+            Ok(out) if !out.status.success() => {
+                let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+                let stderr = if stderr.is_empty() {
+                    String::from_utf8_lossy(&out.stdout).into_owned()
+                } else {
+                    stderr
+                };
+                errors.insert(
+                    fw.name.clone(),
+                    format!(
+                        "firmware `{}` build (`{}`) in {} failed (exit {}). stderr:\n{}",
+                        fw.name,
+                        fw.build,
+                        cwd.display(),
+                        out.status.code().unwrap_or(-1),
+                        stderr
+                    ),
+                );
+            }
+            Err(err) => {
+                errors.insert(
+                    fw.name.clone(),
+                    format!(
+                        "firmware `{}` build (`{}`) in {}: spawn failed: {}",
+                        fw.name,
+                        fw.build,
+                        cwd.display(),
+                        err
+                    ),
+                );
+            }
+            Ok(_) => {}
+        }
+    }
+    errors
+}
+
 fn run_prebuild(project_root: &Path, cmd: &str) -> Result<(), TestError> {
     tracing::debug!(target: "kiln-test", cmd, "running prebuild");
     let output = Command::new("sh")
@@ -848,11 +916,20 @@ pub fn run_many_with_options(
         let _ = tx.send(ProgressEvent::BuildsDone);
     }
 
+    // Project-level firmware builds run before per-test prebuilds so the
+    // test pass sees their artefacts. Failures here surface in the
+    // returned outcome map and abort the test run, mirroring per-test
+    // prebuild failure behaviour.
+    let firmware_errors = run_firmware_builds(project_root, manifest);
+
     // Run prebuilds upfront, deduped, sequentially. We do this before the
     // parallel run so a `make -C software/c_tests/<x>` doesn't get re-run
     // 6 times for 6 sibling tests, and so prebuild failures fail fast.
     let mut seen_prebuilds: HashSet<String> = HashSet::new();
     let mut prebuild_errors: BTreeMap<String, String> = BTreeMap::new();
+    for (name, err) in firmware_errors {
+        prebuild_errors.insert(format!("firmware:{name}"), err);
+    }
     for test in tests {
         if let Some(p) = &test.prebuild {
             if !seen_prebuilds.insert(p.clone()) {
@@ -1188,5 +1265,57 @@ mod tests {
             }
             _ => panic!("expected patterns"),
         }
+    }
+
+    #[test]
+    fn firmware_build_runs_command_and_dedupes() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("fw_a")).unwrap();
+        std::fs::create_dir_all(tmp.path().join("fw_b")).unwrap();
+        let m: Manifest = r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [[firmware]]
+            name = "fw_a"
+            path = "fw_a"
+            build = "touch built_a"
+            [[firmware]]
+            name = "fw_b"
+            path = "fw_b"
+            build = "touch built_b"
+            "#
+        .parse()
+        .unwrap();
+        let errs = run_firmware_builds(tmp.path(), &m);
+        assert!(errs.is_empty(), "firmware errors: {errs:?}");
+        assert!(tmp.path().join("fw_a/built_a").is_file());
+        assert!(tmp.path().join("fw_b/built_b").is_file());
+    }
+
+    #[test]
+    fn firmware_build_failure_surfaces_in_errors_map() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(tmp.path().join("fw")).unwrap();
+        let m: Manifest = r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [[firmware]]
+            name = "broken"
+            path = "fw"
+            build = "false"
+            "#
+        .parse()
+        .unwrap();
+        let errs = run_firmware_builds(tmp.path(), &m);
+        assert!(
+            errs.contains_key("broken"),
+            "expected 'broken' in errors: {errs:?}"
+        );
     }
 }

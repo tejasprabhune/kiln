@@ -112,6 +112,7 @@ mod tests {
             verilator_lint_flags: vec![],
             extra_verilator_args: vec![],
             verilator_options: Default::default(),
+            blackbox_modules: vec![],
         }
     }
 
