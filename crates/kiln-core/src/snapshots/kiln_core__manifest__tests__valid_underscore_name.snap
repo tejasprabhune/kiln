@@ -1,6 +1,5 @@
 ---
 source: crates/kiln-core/src/manifest.rs
-assertion_line: 746
 expression: m
 ---
 package:
@@ -11,6 +10,7 @@ package:
   license: ~
 design:
   top: t
+  aux_tops: []
   sources:
     - src/**/*.sv
     - src/**/*.svh
@@ -39,3 +39,5 @@ test:
   timeout: ~
   cases: []
   matrix: []
+features:
+  default: []

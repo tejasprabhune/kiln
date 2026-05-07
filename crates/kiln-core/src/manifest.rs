@@ -47,6 +47,15 @@ pub enum ManifestError {
         name: String,
         suggestion: Option<String>,
     },
+
+    #[error("unknown feature `{0}` (not declared in `[features]`)")]
+    UnknownFeature(String),
+
+    #[error(
+        "feature name `{0}` is not a valid SystemVerilog identifier (must \
+         start with a letter or `_` and contain only letters, digits, or `_`)"
+    )]
+    InvalidFeatureName(String),
 }
 
 /// A `Kiln.toml` manifest.
@@ -70,6 +79,89 @@ pub struct Manifest {
     pub wave: WaveConfig,
     #[serde(default)]
     pub test: TestConfig,
+    #[serde(default)]
+    pub features: FeaturesConfig,
+}
+
+/// `[features]` table — cargo-style conditional compilation toggles.
+///
+/// Each named feature contributes additional `+define+`s and source globs
+/// when active. The `default` key lists feature names enabled when no
+/// explicit `--features` / `--no-default-features` selection is made.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct FeaturesConfig {
+    /// Features enabled by default. Names must appear in `features`.
+    #[serde(default)]
+    pub default: Vec<String>,
+    /// Defined features keyed by name. The TOML form is
+    /// `[features.<name>]` with `defines` and `sources` sub-keys.
+    #[serde(flatten)]
+    pub features: BTreeMap<String, Feature>,
+}
+
+/// A single named feature.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(deny_unknown_fields)]
+pub struct Feature {
+    /// `+define+NAME` or `+define+NAME=VALUE` entries to add when this
+    /// feature is active. A bare identifier becomes `+define+NAME`;
+    /// `NAME=VALUE` form is also accepted.
+    #[serde(default)]
+    pub defines: Vec<String>,
+    /// Additional source glob patterns to include when this feature is
+    /// active.
+    #[serde(default)]
+    pub sources: Vec<String>,
+}
+
+/// Selection of active features for one build.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FeatureSelection {
+    pub active: Vec<String>,
+}
+
+impl FeatureSelection {
+    /// Build a selection from CLI flags. Cargo-shaped semantics:
+    ///
+    /// - `--all-features` → every defined feature is active.
+    /// - `--no-default-features` → starts empty; only `--features`
+    ///   entries are added.
+    /// - `--features a,b` → adds `a` and `b` on top of the default set
+    ///   (or on top of empty if `--no-default-features`).
+    /// - When no flags are passed, the manifest's `default` list is
+    ///   used.
+    ///
+    /// Returns an error if any requested feature is not defined.
+    pub fn resolve(
+        cfg: &FeaturesConfig,
+        explicit: &[String],
+        all: bool,
+        no_default: bool,
+    ) -> Result<Self, ManifestError> {
+        let mut active: Vec<String> = if all {
+            cfg.features.keys().cloned().collect()
+        } else if no_default {
+            Vec::new()
+        } else {
+            cfg.default.clone()
+        };
+        for name in explicit {
+            for n in name.split([',', ' ']).filter(|s| !s.is_empty()) {
+                if !cfg.features.contains_key(n) {
+                    return Err(ManifestError::UnknownFeature(n.to_string()));
+                }
+                if !active.iter().any(|a| a == n) {
+                    active.push(n.to_string());
+                }
+            }
+        }
+        for name in &active {
+            if !cfg.features.contains_key(name) {
+                return Err(ManifestError::UnknownFeature(name.clone()));
+            }
+        }
+        Ok(Self { active })
+    }
 }
 
 /// `[test]` table — options that apply when running testbenches.
@@ -125,10 +217,11 @@ pub struct TestConfig {
 /// [`Detect::Patterns`] variant lets testbenches that always
 /// `$finish()` cleanly (regardless of pass/fail) signal outcome via
 /// stdout markers.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields, rename_all = "snake_case")]
 pub enum Detect {
     /// Exit code 0 = pass, anything else = fail. The default.
+    #[default]
     ExitCode,
     /// Pattern match on stdout. A test passes if every
     /// `stdout_contains` substring is present and no
@@ -140,12 +233,6 @@ pub enum Detect {
         #[serde(default)]
         stdout_must_not_contain: Vec<String>,
     },
-}
-
-impl Default for Detect {
-    fn default() -> Self {
-        Detect::ExitCode
-    }
 }
 
 /// A duration that round-trips through TOML as a string like `"30s"`,
@@ -172,11 +259,11 @@ impl Serialize for DurationSpec {
     fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
         // Prefer the most natural unit for round-trip readability.
         let d = self.0;
-        let s = if d.as_millis() % 1000 != 0 {
+        let s = if !d.as_millis().is_multiple_of(1000) {
             format!("{}ms", d.as_millis())
-        } else if d.as_secs() % 60 != 0 || d.as_secs() == 0 {
+        } else if !d.as_secs().is_multiple_of(60) || d.as_secs() == 0 {
             format!("{}s", d.as_secs())
-        } else if d.as_secs() % 3600 != 0 {
+        } else if !d.as_secs().is_multiple_of(3600) {
             format!("{}m", d.as_secs() / 60)
         } else {
             format!("{}h", d.as_secs() / 3600)
@@ -196,9 +283,7 @@ fn parse_duration(s: &str) -> Result<std::time::Duration, String> {
     } else if let Some(stripped) = s.strip_suffix('h') {
         (stripped, "h")
     } else {
-        return Err(format!(
-            "duration `{s}` must end in `ms`, `s`, `m`, or `h`"
-        ));
+        return Err(format!("duration `{s}` must end in `ms`, `s`, `m`, or `h`"));
     };
     let n: u64 = num_part
         .trim()
@@ -313,6 +398,13 @@ pub struct Package {
 #[serde(deny_unknown_fields)]
 pub struct Design {
     pub top: String,
+    /// Auxiliary top modules elaborated alongside `top`. Slang accepts
+    /// multiple tops via repeated `--top` flags; this is how a project
+    /// keeps non-instantiated helpers (e.g. Xilinx `glbl`) in scope for
+    /// `kiln check` / `kiln doc`. Verilator only supports one
+    /// `--top-module`, so this list is informational for Verilator.
+    #[serde(default)]
+    pub aux_tops: Vec<String>,
     #[serde(default = "Design::default_sources")]
     pub sources: Vec<String>,
     #[serde(default)]
@@ -401,7 +493,7 @@ pub struct ToolSlang {
 }
 
 /// `[tool.verilator]` table.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ToolVerilator {
     #[serde(default)]
@@ -412,18 +504,55 @@ pub struct ToolVerilator {
     pub trace: TraceFormat,
     #[serde(default)]
     pub coverage: bool,
+    /// Enables `--timing` for designs that use delays / event control.
+    #[serde(default)]
+    pub timing: bool,
+    /// X-assignment policy. Maps to `--x-assign <value>`.
+    #[serde(default)]
+    pub x_assign: Option<XAssign>,
+    /// Black-box unsupported constructs (e.g. vendor primitives).
+    /// Maps to `--bbox-unsup`.
+    #[serde(default)]
+    pub bbox_unsup: bool,
+    /// Include struct fields in the trace. Only effective when `trace`
+    /// is `vcd` or `fst`. Maps to `--trace-structs`.
+    #[serde(default)]
+    pub trace_structs: bool,
+    /// Include parameter values in the trace. Only effective when
+    /// `trace` is `vcd` or `fst`. Maps to `--trace-params`.
+    #[serde(default)]
+    pub trace_params: bool,
+    /// Maximum trace depth. Only effective when `trace` is `vcd` or
+    /// `fst`. Maps to `--trace-depth N`.
+    #[serde(default)]
+    pub trace_depth: Option<u32>,
     #[serde(default)]
     pub extra_args: Vec<String>,
 }
 
-impl Default for ToolVerilator {
-    fn default() -> Self {
-        Self {
-            path: None,
-            threads: None,
-            trace: TraceFormat::Off,
-            coverage: false,
-            extra_args: Vec::new(),
+/// X-assignment policy for verilator's `--x-assign` flag. Controls how
+/// uninitialised signals are treated in simulation: `Zero`/`One` force a
+/// constant, `Fast` lets verilator pick whichever is cheaper at each use
+/// site, and `Unique` picks a randomly-seeded constant per net to surface
+/// X-propagation bugs that constant-zero would mask.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum XAssign {
+    #[serde(rename = "0")]
+    Zero,
+    #[serde(rename = "1")]
+    One,
+    Fast,
+    Unique,
+}
+
+impl XAssign {
+    pub fn as_flag_value(&self) -> &'static str {
+        match self {
+            XAssign::Zero => "0",
+            XAssign::One => "1",
+            XAssign::Fast => "fast",
+            XAssign::Unique => "unique",
         }
     }
 }
@@ -610,7 +739,41 @@ impl Manifest {
                 source,
             });
         }
+        for name in self.features.features.keys() {
+            if !is_valid_sv_identifier(name) {
+                return Err(ManifestError::InvalidFeatureName(name.clone()));
+            }
+        }
+        for name in &self.features.default {
+            if !self.features.features.contains_key(name) {
+                return Err(ManifestError::UnknownFeature(name.clone()));
+            }
+        }
         Ok(())
+    }
+
+    /// Apply a feature selection to the resolved design: merges feature
+    /// `defines` into `design.defines` and appends feature `sources` to
+    /// `design.sources`. Later features override earlier ones on
+    /// conflicting define keys (last write wins, in selection order).
+    pub fn apply_features(&self, design: &mut Design, selection: &FeatureSelection) {
+        for name in &selection.active {
+            let Some(feat) = self.features.features.get(name) else {
+                continue;
+            };
+            for entry in &feat.defines {
+                let (k, v) = match entry.split_once('=') {
+                    Some((k, v)) => (k.to_string(), v.to_string()),
+                    None => (entry.clone(), String::new()),
+                };
+                design.defines.insert(k, v);
+            }
+            for src in &feat.sources {
+                if !design.sources.contains(src) {
+                    design.sources.push(src.clone());
+                }
+            }
+        }
     }
 
     /// Validation that depends on `project_root` (e.g., include-dir existence).
@@ -1161,6 +1324,296 @@ mod tests {
         let serialized = toml::to_string(&m1).unwrap();
         let m2: Manifest = serialized.parse().unwrap();
         assert_eq!(m1, m2);
+    }
+
+    #[test]
+    fn tool_verilator_first_class_knobs() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.verilator]
+            timing = true
+            x_assign = "unique"
+            bbox_unsup = true
+            trace = "fst"
+            trace_structs = true
+            trace_params = true
+            trace_depth = 8
+            "#,
+        )
+        .unwrap();
+        let v = m.tool.verilator.as_ref().unwrap();
+        assert!(v.timing);
+        assert_eq!(v.x_assign, Some(XAssign::Unique));
+        assert!(v.bbox_unsup);
+        assert!(v.trace_structs);
+        assert!(v.trace_params);
+        assert_eq!(v.trace_depth, Some(8));
+    }
+
+    #[test]
+    fn x_assign_accepts_zero_one_fast_unique() {
+        for (s, expected) in [
+            ("\"0\"", XAssign::Zero),
+            ("\"1\"", XAssign::One),
+            ("\"fast\"", XAssign::Fast),
+            ("\"unique\"", XAssign::Unique),
+        ] {
+            let src = format!(
+                r#"
+                [package]
+                name = "demo"
+                version = "0.1.0"
+
+                [design]
+                top = "t"
+
+                [tool.verilator]
+                x_assign = {s}
+                "#
+            );
+            let m: Manifest = src.parse().unwrap();
+            assert_eq!(m.tool.verilator.unwrap().x_assign, Some(expected));
+        }
+    }
+
+    #[test]
+    fn x_assign_rejects_unknown() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [tool.verilator]
+            x_assign = "five"
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::Parse(_)));
+    }
+
+    #[test]
+    fn design_aux_tops_round_trips() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "z1top"
+            aux_tops = ["glbl", "BUFG_helper"]
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.design.aux_tops, vec!["glbl", "BUFG_helper"]);
+    }
+
+    #[test]
+    fn design_aux_tops_default_empty() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+            "#,
+        )
+        .unwrap();
+        assert!(m.design.aux_tops.is_empty());
+    }
+
+    #[test]
+    fn features_parse_and_resolve_default() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [features]
+            default = ["sim"]
+
+            [features.sim]
+            defines = ["SIM"]
+
+            [features.debug]
+            defines = ["DEBUG=1"]
+            sources = ["src/debug/**/*.sv"]
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.features.default, vec!["sim"]);
+        assert_eq!(m.features.features.len(), 2);
+        let sel = FeatureSelection::resolve(&m.features, &[], false, false).unwrap();
+        assert_eq!(sel.active, vec!["sim"]);
+    }
+
+    #[test]
+    fn features_resolve_no_default() {
+        let m = parse(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [features]
+            default = ["a"]
+
+            [features.a]
+            defines = ["A"]
+
+            [features.b]
+            defines = ["B"]
+            "#,
+        )
+        .unwrap();
+        let sel = FeatureSelection::resolve(&m.features, &[], false, true).unwrap();
+        assert!(sel.active.is_empty());
+        let sel = FeatureSelection::resolve(&m.features, &["b".to_string()], false, true).unwrap();
+        assert_eq!(sel.active, vec!["b"]);
+    }
+
+    #[test]
+    fn features_resolve_all() {
+        let m = parse(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [features]
+            default = []
+
+            [features.a]
+            defines = ["A"]
+
+            [features.b]
+            defines = ["B"]
+            "#,
+        )
+        .unwrap();
+        let sel = FeatureSelection::resolve(&m.features, &[], true, false).unwrap();
+        assert_eq!(sel.active.len(), 2);
+        assert!(sel.active.contains(&"a".to_string()));
+        assert!(sel.active.contains(&"b".to_string()));
+    }
+
+    #[test]
+    fn features_resolve_unknown_errors() {
+        let m = parse(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [features]
+            default = []
+
+            [features.a]
+            "#,
+        )
+        .unwrap();
+        let err = FeatureSelection::resolve(&m.features, &["nope".to_string()], false, false)
+            .unwrap_err();
+        assert!(matches!(err, ManifestError::UnknownFeature(_)));
+    }
+
+    #[test]
+    fn features_default_must_exist() {
+        let err = parse(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [features]
+            default = ["ghost"]
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::UnknownFeature(_)));
+    }
+
+    #[test]
+    fn features_apply_merges_defines_and_sources() {
+        let m = parse(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+            sources = ["src/**/*.sv"]
+            defines = { BASE = "1" }
+
+            [features]
+            default = []
+
+            [features.debug]
+            defines = ["DEBUG", "VERBOSITY=2"]
+            sources = ["src/debug/**/*.sv"]
+            "#,
+        )
+        .unwrap();
+        let sel =
+            FeatureSelection::resolve(&m.features, &["debug".to_string()], false, false).unwrap();
+        let mut design = m.design.clone();
+        m.apply_features(&mut design, &sel);
+        assert_eq!(design.defines.get("BASE"), Some(&"1".to_string()));
+        assert_eq!(design.defines.get("DEBUG"), Some(&"".to_string()));
+        assert_eq!(design.defines.get("VERBOSITY"), Some(&"2".to_string()));
+        assert!(design.sources.contains(&"src/debug/**/*.sv".to_string()));
+    }
+
+    #[test]
+    fn features_invalid_name_errors() {
+        let err = parse(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [features]
+            default = []
+
+            [features."1bad"]
+            defines = []
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::InvalidFeatureName(_)));
     }
 
     #[test]
