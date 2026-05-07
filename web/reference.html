@@ -127,6 +127,12 @@
         <td></td>
       </tr>
       <tr>
+        <td><code>aux_tops</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+      <tr>
         <td><code>sources</code></td>
         <td><span class="opt">optional</span></td>
         <td>list of glob strings</td>
@@ -177,6 +183,9 @@
     <code>defines</code> entries with an empty string become <code>+define+FOO</code>;
     non-empty values become <code>+define+FOO=bar</code>.
     <code>include_dirs</code> entries must exist on disk when loading an existing project.
+    <code>aux_tops</code> lists additional top modules that slang elaborates alongside <code>top</code>
+    (useful for non-instantiated helpers like Xilinx's <code>glbl</code>);
+    Verilator only supports a single <code>--top-module</code> and ignores this list.
   </p>
   <pre><code>[design]
 top          = "soc_top"
@@ -297,7 +306,43 @@ DECLFILENAME = "off"</code></pre>
         <td><span class="default"><code>false</code></span></td>
       </tr>
       <tr>
+        <td><code>trace_structs</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>bool</td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+      <tr>
+        <td><code>trace_params</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>bool</td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+      <tr>
+        <td><code>trace_depth</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>integer</td>
+        <td><span class="default">none</span></td>
+      </tr>
+      <tr>
         <td><code>coverage</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>bool</td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+      <tr>
+        <td><code>timing</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>bool</td>
+        <td><span class="default"><code>false</code></span></td>
+      </tr>
+      <tr>
+        <td><code>x_assign</code></td>
+        <td><span class="opt">optional</span></td>
+        <td><code>"0"</code> | <code>"1"</code> | <code>"fast"</code> | <code>"unique"</code></td>
+        <td><span class="default">none (release profile keeps <code>"0"</code>)</span></td>
+      </tr>
+      <tr>
+        <td><code>bbox_unsup</code></td>
         <td><span class="opt">optional</span></td>
         <td>bool</td>
         <td><span class="default"><code>false</code></span></td>
@@ -310,6 +355,13 @@ DECLFILENAME = "off"</code></pre>
       </tr>
     </tbody>
   </table>
+  <p>
+    <code>trace_structs</code>, <code>trace_params</code> and <code>trace_depth</code>
+    are only emitted when <code>trace</code> is <code>"vcd"</code> or <code>"fst"</code>.
+    <code>timing</code> is required for designs that use delays or event control.
+    <code>bbox_unsup</code> black-boxes unsupported constructs (vendor primitives like
+    Xilinx <code>PLLE2_ADV</code>) so verilator can elaborate the rest of the design.
+  </p>
 
   <h2><code>[tool.verible]</code></h2>
   <table class="field-table">
@@ -363,6 +415,64 @@ coverage = true
 unused = "error"</code></pre>
   <p>
     Select a profile with <code>--profile &lt;name&gt;</code> or <code>--release</code>.
+  </p>
+
+  <!-- [features] -->
+  <h2><code>[features]</code></h2>
+  <p>
+    Cargo-shaped conditional compilation. Each named feature contributes
+    additional <code>+define+</code> flags and source globs when active.
+    Feature names must be valid SystemVerilog identifiers.
+  </p>
+  <pre><code>[features]
+default = ["sim"]
+
+[features.sim]
+defines = ["SIM"]
+
+[features.debug]
+defines = ["DEBUG=1", "VERBOSITY=2"]
+sources = ["src/debug/**/*.sv"]</code></pre>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>default</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>Each <code>[features.&lt;name&gt;]</code> block accepts:</p>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>defines</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+      <tr>
+        <td><code>sources</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of glob strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    Each <code>defines</code> entry is either <code>NAME</code>
+    (becomes <code>+define+NAME</code>) or <code>NAME=VALUE</code>
+    (<code>+define+NAME=VALUE</code>). CLI flags mirror cargo:
+    <code>--features sim,debug</code> activates listed features on top of
+    the default set; <code>--all-features</code> activates every defined feature;
+    <code>--no-default-features</code> starts from an empty selection.
   </p>
 
   <!-- [wave] -->

@@ -70,6 +70,7 @@ The exception is `[lint]`, where keys are user-defined rule names.
 | Key            | Type                 | Required | Default                                          |
 | -------------- | -------------------- | -------- | ------------------------------------------------ |
 | `top`          | string               | yes      | —                                                |
+| `aux_tops`     | list of strings      | no       | `[]`                                             |
 | `sources`      | list of glob strings | no       | `["src/**/*.sv", "src/**/*.svh", "src/**/*.v"]` |
 | `timescale`    | string               | no       | none                                             |
 | `language`     | enum (see below)     | no       | none (slang/verilator default)                   |
@@ -77,6 +78,12 @@ The exception is `[lint]`, where keys are user-defined rule names.
 | `defines`      | string-to-string map | no       | `{}`                                             |
 | `libraries`    | list of strings      | no       | `[]`                                             |
 | `test_sources` | list of glob strings | no       | `[]` (falls back to `tests/*.sv` discovery)      |
+
+`aux_tops` is the list of additional top modules that should be elaborated
+alongside `top` for slang-driven commands (`kiln check`, `kiln doc`,
+`kiln lsp`). Use it for non-instantiated helper modules — the Xilinx
+`glbl` module is the canonical example. Verilator only supports a single
+`--top-module`, so `aux_tops` is ignored by `kiln build`.
 
 `language` values: `"sv2005"`, `"sv2009"`, `"sv2012"`, `"sv2017"`, `"sv2023"`.
 Maps to `--std` for slang and `--default-language` for verilator.
@@ -181,13 +188,19 @@ cover the common cases; `extra_args` handles the rest.
 
 ### `[tool.verilator]`
 
-| Key          | Type           | Default | Notes |
-| ------------ | -------------- | ------- | ----- |
-| `path`       | path           | (PATH)  | Override the `verilator` binary location. |
-| `threads`    | integer        | none    | Passed as `--threads N`. |
-| `trace`      | `false` \| `"vcd"` \| `"fst"` | `false` | Enables waveform dumping. |
-| `coverage`   | bool           | `false` | Enables coverage instrumentation. |
-| `extra_args` | list of strings | `[]`   | Appended verbatim after all kiln-managed flags. |
+| Key             | Type                                  | Default | Notes |
+| --------------- | ------------------------------------- | ------- | ----- |
+| `path`          | path                                  | (PATH)  | Override the `verilator` binary location. |
+| `threads`       | integer                               | none    | Passed as `--threads N`. |
+| `trace`         | `false` \| `"vcd"` \| `"fst"`        | `false` | Enables waveform dumping. |
+| `trace_structs` | bool                                  | `false` | Adds `--trace-structs` (only when `trace` is enabled). |
+| `trace_params`  | bool                                  | `false` | Adds `--trace-params` (only when `trace` is enabled). |
+| `trace_depth`   | integer                               | none    | Adds `--trace-depth N` (only when `trace` is enabled). |
+| `coverage`      | bool                                  | `false` | Enables coverage instrumentation (`--coverage`). |
+| `timing`        | bool                                  | `false` | Adds `--timing` for designs that use delays / event control. |
+| `x_assign`      | `"0"` \| `"1"` \| `"fast"` \| `"unique"` | none | Adds `--x-assign <value>`. When unset, the `release` profile still emits its historical `--x-assign 0` default. |
+| `bbox_unsup`    | bool                                  | `false` | Adds `--bbox-unsup` to black-box unsupported constructs (e.g. vendor primitives). |
+| `extra_args`    | list of strings                       | `[]`    | Appended verbatim after all kiln-managed flags. |
 
 ### `[tool.verible]`
 
@@ -222,6 +235,47 @@ unused = "error"
 
 A profile can override `[design]`, `[lint]`, `[lint.slang]`, `[lint.verilator]`,
 `[tool.slang]`, `[tool.verilator]`, and `[tool.verible]`.
+
+## `[features]`
+
+Cargo-style conditional compilation toggles. Each named feature contributes
+additional `+define+` flags and source globs when active:
+
+```toml
+[features]
+default = ["sim"]
+
+[features.sim]
+defines = ["SIM"]
+
+[features.debug]
+defines = ["DEBUG=1", "VERBOSITY=2"]
+sources = ["src/debug/**/*.sv"]
+```
+
+| Key       | Type             | Default | Notes |
+| --------- | ---------------- | ------- | ----- |
+| `default` | list of strings  | `[]`    | Features active when no `--features` flag is passed. Every name must appear in `[features.<name>]`. |
+
+Each `[features.<name>]` block accepts:
+
+| Key       | Type             | Default | Notes |
+| --------- | ---------------- | ------- | ----- |
+| `defines` | list of strings  | `[]`    | Each entry is either `NAME` (becomes `+define+NAME`) or `NAME=VALUE` (`+define+NAME=VALUE`). |
+| `sources` | list of glob strings | `[]` | Additional source globs included only when this feature is active. |
+
+Feature names must be valid SystemVerilog identifiers.
+
+CLI surface (mirrors cargo):
+
+- `--features <list>` — comma- or space-separated names; adds to the
+  default set.
+- `--all-features` — activate every defined feature.
+- `--no-default-features` — start from an empty selection; only
+  `--features` entries become active.
+
+Active features run in selection order; later features overwrite earlier
+ones on conflicting `defines` keys.
 
 ## `[wave]`
 
