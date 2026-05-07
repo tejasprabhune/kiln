@@ -155,10 +155,14 @@ fn syntax_error_reports_correct_file_line_col() {
         combined.contains("error:"),
         "expected an `error:` label; got:\n{combined}"
     );
-    // Plain-text caret rendering should be present.
+    // Source location should be highlighted with either the plain-text
+    // `^` caret or ariadne's box-drawing span markers.
     assert!(
-        combined.contains("^"),
-        "expected a `^` caret; got:\n{combined}"
+        combined.contains('^')
+            || combined.contains('│')
+            || combined.contains('╭')
+            || combined.contains('╯'),
+        "expected a `^` caret or ariadne span markers; got:\n{combined}"
     );
 }
 

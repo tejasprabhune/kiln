@@ -106,8 +106,11 @@ fn check_renders_with_caret() {
         .clone();
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains("^"),
-        "expected `^` caret in rendered diagnostic; stdout:\n{stdout}"
+        stdout.contains('^')
+            || stdout.contains('│')
+            || stdout.contains('╭')
+            || stdout.contains('╯'),
+        "expected `^` caret or ariadne span markers in rendered diagnostic; stdout:\n{stdout}"
     );
 }
 

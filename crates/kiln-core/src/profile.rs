@@ -45,6 +45,24 @@ impl ResolvedConfig {
                     if v.coverage {
                         tool_verilator.coverage = true;
                     }
+                    if v.timing {
+                        tool_verilator.timing = true;
+                    }
+                    if v.x_assign.is_some() {
+                        tool_verilator.x_assign = v.x_assign;
+                    }
+                    if v.bbox_unsup {
+                        tool_verilator.bbox_unsup = true;
+                    }
+                    if v.trace_structs {
+                        tool_verilator.trace_structs = true;
+                    }
+                    if v.trace_params {
+                        tool_verilator.trace_params = true;
+                    }
+                    if v.trace_depth.is_some() {
+                        tool_verilator.trace_depth = v.trace_depth;
+                    }
                 }
                 if let Some(vb) = &t.verible {
                     tool_verible.extra_args = vb.extra_args.clone();

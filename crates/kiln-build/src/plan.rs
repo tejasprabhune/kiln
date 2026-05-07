@@ -56,6 +56,42 @@ pub struct BuildPlan {
     /// Extra flags forwarded verbatim to verilator.
     #[serde(default)]
     pub extra_verilator_args: Vec<String>,
+    /// First-class `[tool.verilator]` knobs, lifted out of `extra_args`.
+    #[serde(default)]
+    pub verilator_options: VerilatorOptions,
+}
+
+/// First-class verilator flags surfaced in `[tool.verilator]`. Each field
+/// here corresponds to a typed knob in the manifest; raw `extra_args`
+/// continues to handle anything not covered.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerilatorOptions {
+    /// Adds `--timing`.
+    #[serde(default)]
+    pub timing: bool,
+    /// Adds `--x-assign <value>`. When `None`, the release profile still
+    /// emits its historical `--x-assign 0` default.
+    #[serde(default)]
+    pub x_assign: Option<String>,
+    /// Adds `--bbox-unsup`.
+    #[serde(default)]
+    pub bbox_unsup: bool,
+    /// Adds `--trace-structs` when tracing is enabled.
+    #[serde(default)]
+    pub trace_structs: bool,
+    /// Adds `--trace-params` when tracing is enabled.
+    #[serde(default)]
+    pub trace_params: bool,
+    /// Adds `--trace-depth N` when tracing is enabled.
+    #[serde(default)]
+    pub trace_depth: Option<u32>,
+    /// Adds `--threads N`.
+    #[serde(default)]
+    pub threads: Option<u32>,
+    /// Adds `--coverage` (the kitchen-sink `--coverage-line --coverage-toggle`
+    /// shorthand).
+    #[serde(default)]
+    pub coverage: bool,
 }
 
 impl BuildPlan {
@@ -108,6 +144,19 @@ impl BuildPlan {
                 .collect(),
             verilator_lint_flags: build_verilator_lint_flags(&resolved.lint),
             extra_verilator_args: resolved.tool_verilator.extra_args.clone(),
+            verilator_options: VerilatorOptions {
+                timing: resolved.tool_verilator.timing,
+                x_assign: resolved
+                    .tool_verilator
+                    .x_assign
+                    .map(|x| x.as_flag_value().to_string()),
+                bbox_unsup: resolved.tool_verilator.bbox_unsup,
+                trace_structs: resolved.tool_verilator.trace_structs,
+                trace_params: resolved.tool_verilator.trace_params,
+                trace_depth: resolved.tool_verilator.trace_depth,
+                threads: resolved.tool_verilator.threads,
+                coverage: resolved.tool_verilator.coverage,
+            },
         }
     }
 }
@@ -199,6 +248,44 @@ mod tests {
         assert_eq!(plan.timescale.as_deref(), Some("1ns/1ps"));
         assert_eq!(plan.language.as_deref(), Some("1800-2017"));
         assert_eq!(plan.libraries, vec![PathBuf::from("/proj/vendor/lib")]);
+    }
+
+    #[test]
+    fn plan_carries_verilator_options() {
+        let m: Manifest = r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+
+            [design]
+            top = "top"
+
+            [tool.verilator]
+            threads = 4
+            timing = true
+            x_assign = "unique"
+            bbox_unsup = true
+            trace = "fst"
+            trace_structs = true
+            trace_params = true
+            trace_depth = 6
+        "#
+        .parse()
+        .unwrap();
+        let set = SourceSet {
+            project_root: PathBuf::from("/proj"),
+            files: vec![],
+        };
+        let plan = BuildPlan::new(&m, &set, Profile::Debug);
+        let v = &plan.verilator_options;
+        assert!(v.timing);
+        assert_eq!(v.x_assign.as_deref(), Some("unique"));
+        assert!(v.bbox_unsup);
+        assert!(v.trace_structs);
+        assert!(v.trace_params);
+        assert_eq!(v.trace_depth, Some(6));
+        assert_eq!(v.threads, Some(4));
+        assert!(plan.trace);
     }
 
     #[test]

@@ -3,6 +3,64 @@
 > Living status doc. Each session that ships milestone work appends a section
 > below. The most recent section is the current state.
 
+## 2026-05-06 — M10 (Schema extensibility)
+
+**Branch:** `milestone/m10-schema-extensibility`
+**PR:** [#15](https://github.com/tejasprabhune/kiln/pull/15)
+
+### Summary
+
+`Kiln.toml` gains three additions evidence-driven by a real EE 151 RISC-V
+FPGA project that was routing common verilator flags and a Xilinx `glbl`
+auxiliary top through `[tool.*].extra_args`. After this milestone the
+relevant flags are typed:
+
+- `[tool.verilator]` adds `timing`, `x_assign`, `bbox_unsup`,
+  `trace_structs`, `trace_params`, `trace_depth`.
+- `[design]` adds `aux_tops` (passed to slang as repeated `--top` flags;
+  Verilator only supports one `--top-module` and ignores it).
+- `[features]` introduces cargo-shaped conditional compilation with
+  `defines` + `sources` per feature, plus `--features`,
+  `--all-features`, `--no-default-features` on every plan-producing
+  subcommand.
+
+`extra_args` remains the permanent escape hatch.
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+| --------- | ------ | -------- |
+| EE 151 manifest's `extra_args` entries become typed fields | pass | `crates/kiln-core/src/manifest.rs` `tool_verilator_first_class_knobs`, `x_assign_*`, `design_aux_tops_round_trips` |
+| `--features` / `--all-features` / `--no-default-features` mirror cargo | pass | `crates/kiln-core/src/manifest.rs` `features_resolve_*` |
+| Active features merge defines and append source globs | pass | `features_apply_merges_defines_and_sources` |
+| `aux_tops` reach slang via repeated `--top` flags | pass | `crates/kiln-lint/src/lib.rs` `aux_tops_become_additional_top_flags` |
+| User `x_assign` wins over release-profile default | pass | `crates/kiln-build/src/backend/verilator.rs` `x_assign_user_value_wins_over_release_default` |
+| Trace sub-flags only emitted when `trace` is on | pass | `trace_substructure_flags_only_when_tracing` |
+| Manifest-spec doc + website reference reflect new fields | pass | `docs/manifest-spec.md`, `web/reference.html` |
+| `install.sh` works on Linux/macOS with cross-shell PATH bootstrap | pass | rewritten along the lines of bv's installer |
+
+### ADRs filed
+
+- `docs/decisions/0005-schema-extensibility-m10.md` — **accepted**.
+  Captures rationale for promoting verilator knobs, the
+  `--top` interpretation of `aux_tops`, and the cargo-shaped feature
+  surface. Lists explicit out-of-scope follow-ups (vendor blocks,
+  firmware blocks, hooks, workspaces, watch mode, doctor) so they
+  can land as separate milestones.
+
+### Deviations from `kiln-milestones.md`
+
+`kiln-milestones.md` ends at M9. M10 is the first milestone authored
+in-session in response to a real-user audit; ADR 0005 is its
+specification.
+
+### Next session pickup
+
+Bucket 2/3 audit items deferred from this milestone: workspaces,
+`kiln watch`, `kiln doctor`, JSON-everywhere, `kiln check --fix`,
+multi-simulator backend abstraction, `[vendor.<name>]`,
+`[[firmware]]`, `[hooks]`. Each is its own milestone + ADR.
+
 ## 2026-05-02 — M0 (Foundation)
 
 **Branch:** `milestone/m0-foundation`

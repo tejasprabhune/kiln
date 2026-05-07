@@ -9,16 +9,18 @@ use kiln_core::{find_manifest, Manifest};
 use slang_rs::Slang;
 
 use crate::commands::build::fmt_elapsed;
+use crate::commands::{apply_feature_flags, FeatureFlags};
 use crate::reporter;
 
-pub fn run(open: bool, _profile: &str) -> Result<()> {
+pub fn run(open: bool, _profile: &str, features: &FeatureFlags) -> Result<()> {
     let cwd = std::env::current_dir().context("reading current directory")?;
     let manifest_path = find_manifest(&cwd)?;
     let project_root = manifest_path
         .parent()
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
-    let manifest = Manifest::load(&manifest_path)?;
+    let mut manifest = Manifest::load(&manifest_path)?;
+    apply_feature_flags(&mut manifest, features)?;
     let source_set = SourceSet::resolve(&project_root, &manifest)?;
 
     reporter::status(

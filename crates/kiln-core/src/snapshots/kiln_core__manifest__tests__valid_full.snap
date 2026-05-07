@@ -1,6 +1,5 @@
 ---
 source: crates/kiln-core/src/manifest.rs
-assertion_line: 730
 expression: m
 ---
 package:
@@ -12,6 +11,7 @@ package:
   license: MIT OR Apache-2.0
 design:
   top: widget_top
+  aux_tops: []
   sources:
     - rtl/**/*.sv
   timescale: ~
@@ -41,3 +41,5 @@ test:
   timeout: ~
   cases: []
   matrix: []
+features:
+  default: []
