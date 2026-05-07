@@ -4,6 +4,7 @@ use std::process::ExitCode;
 use clap::Parser;
 
 mod commands;
+mod hooks;
 mod render;
 mod reporter;
 

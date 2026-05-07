@@ -43,6 +43,8 @@ mod check;
 mod check_manifest;
 mod deps;
 mod doc;
+mod doctor;
+pub mod env;
 mod fmt;
 mod install_tools;
 mod lint;
@@ -253,6 +255,12 @@ enum Command {
     /// Print a JSON Schema for `Kiln.toml` to stdout.
     Schema,
 
+    /// Print discovered external tools and their versions.
+    Env,
+
+    /// Run environment + project sanity checks.
+    Doctor,
+
     /// Open a recorded FST waveform in surfer.
     Wave {
         /// Test name. Defaults to the most recently produced FST.
@@ -400,6 +408,8 @@ impl Cli {
                 LintSubcommand::Explain { name } => lint::run_explain(&name),
             },
             Command::Schema => schema::run(),
+            Command::Env => env::run(),
+            Command::Doctor => doctor::run(),
             Command::Wave { test, print_path } => wave::run(test, print_path),
             Command::Lsp => lsp::run(),
             Command::InstallTools {
