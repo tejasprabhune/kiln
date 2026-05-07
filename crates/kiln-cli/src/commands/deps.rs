@@ -62,10 +62,15 @@ pub fn run_remove(name: String) -> Result<()> {
 }
 
 pub fn run_update() -> Result<()> {
+    use kiln_deps::LockMode;
+    let mode = crate::commands::current_lock_mode();
+    if mode == LockMode::Frozen {
+        anyhow::bail!("`kiln update --frozen` is contradictory: `--frozen` forbids resolving deps");
+    }
     let (project_root, manifest_path) = project_paths()?;
     let manifest = Manifest::load(&manifest_path)?;
     reporter::status("Updating", "dependency lockfile");
-    kiln_deps::update(&project_root, &manifest)?;
+    kiln_deps::update_with_mode(&project_root, &manifest, mode)?;
     reporter::status("Updated", "`Kiln.lock`");
     Ok(())
 }
@@ -73,7 +78,8 @@ pub fn run_update() -> Result<()> {
 pub fn run_tree() -> Result<()> {
     let (project_root, manifest_path) = project_paths()?;
     let manifest = Manifest::load(&manifest_path)?;
-    let tree = kiln_deps::tree(&project_root, &manifest)?;
+    let mode = crate::commands::current_lock_mode();
+    let tree = kiln_deps::tree_with_mode(&project_root, &manifest, mode)?;
     // Tree output is data; goes to stdout for piping. Skip a status header.
     print!("{tree}");
     Ok(())

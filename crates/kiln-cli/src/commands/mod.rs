@@ -1,7 +1,17 @@
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
+
+/// Process-wide lock mode set once by `Cli::run` and read by every
+/// command that resolves dependencies. Defaults to `Free` if unset
+/// (e.g. in tests that drive command functions directly).
+static LOCK_MODE: OnceLock<kiln_deps::LockMode> = OnceLock::new();
+
+pub fn current_lock_mode() -> kiln_deps::LockMode {
+    *LOCK_MODE.get().unwrap_or(&kiln_deps::LockMode::Free)
+}
 
 /// Resolve a feature selection from CLI flags against a manifest, then apply
 /// it to the design (mutating `manifest.design.defines` and
@@ -52,7 +62,45 @@ mod lsp;
 mod new;
 mod schema;
 mod test;
+mod watch;
 mod wave;
+
+/// Re-run `check` from inside the watch loop with sensible defaults.
+pub fn check_for_watch() -> Result<()> {
+    check::run(false, false, "dev", &FeatureFlags::default())
+}
+
+/// Re-run `build` from inside the watch loop with sensible defaults.
+pub fn build_for_watch() -> Result<()> {
+    build::run_build("dev", false, &FeatureFlags::default()).map(|_| ())
+}
+
+/// Re-run `test` from inside the watch loop. Filters propagate; everything
+/// else uses defaults.
+pub fn test_for_watch(filters: Vec<String>) -> Result<()> {
+    test::run(test::Args {
+        filters,
+        exact: false,
+        skip: Vec::new(),
+        tag: Vec::new(),
+        jobs: None,
+        no_fail_fast: true,
+        list: false,
+        nocapture: false,
+        show_output: false,
+        rerun: false,
+        skip_passed: false,
+        trace: false,
+        profile: "test".to_string(),
+        features: FeatureFlags::default(),
+        reporter: test::ReporterKind::Human,
+    })
+}
+
+/// Re-run `fmt --check` from inside the watch loop.
+pub fn fmt_for_watch() -> Result<()> {
+    fmt::run(true, fmt::OutputFormat::Plain)
+}
 
 /// The `kiln` CLI.
 #[derive(Debug, Parser)]
@@ -68,6 +116,18 @@ pub struct Cli {
     #[arg(short, long, global = true)]
     verbose: bool,
 
+    /// Refuse to mutate `Kiln.lock`. Errors if a refresh would change
+    /// the lockfile to match `Kiln.toml`. Useful in CI to enforce that
+    /// the committed lockfile is in sync with the manifest.
+    #[arg(long, global = true)]
+    locked: bool,
+
+    /// Implies `--locked`, plus refuses to make any network request
+    /// during dependency resolution. The existing `Kiln.lock` /
+    /// `Bender.lock` are used as-is.
+    #[arg(long, global = true, conflicts_with = "locked")]
+    frozen: bool,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -75,6 +135,16 @@ pub struct Cli {
 impl Cli {
     pub fn global_verbose(&self) -> bool {
         self.verbose
+    }
+
+    pub fn lock_mode(&self) -> kiln_deps::LockMode {
+        if self.frozen {
+            kiln_deps::LockMode::Frozen
+        } else if self.locked {
+            kiln_deps::LockMode::Locked
+        } else {
+            kiln_deps::LockMode::Free
+        }
     }
 }
 
@@ -230,6 +300,11 @@ enum Command {
         /// Build profile to use. Defaults to `test`.
         #[arg(long, default_value = "test")]
         profile: String,
+        /// Output reporter. `human` (default) prints the cargo-style
+        /// progress UI; `junit` writes a JUnit XML file to
+        /// `target/kiln/junit.xml` and suppresses human output.
+        #[arg(long, value_parser = ["human", "junit"], default_value = "human")]
+        reporter: String,
         #[command(flatten)]
         features: FeatureFlags,
     },
@@ -260,6 +335,12 @@ enum Command {
 
     /// Run environment + project sanity checks.
     Doctor,
+
+    /// Watch the project tree and re-run a subcommand on every change.
+    Watch {
+        #[command(subcommand)]
+        subcommand: WatchTarget,
+    },
 
     /// Open a recorded FST waveform in surfer.
     Wave {
@@ -300,6 +381,33 @@ enum Command {
 }
 
 #[derive(Debug, Subcommand)]
+enum WatchTarget {
+    /// Re-run `kiln check` on every relevant change.
+    Check,
+    /// Re-run `kiln build` on every relevant change.
+    Build,
+    /// Re-run `kiln test` on every relevant change. Optional filter
+    /// substrings are forwarded to the test command.
+    Test {
+        /// Substring filters forwarded to `kiln test`.
+        filters: Vec<String>,
+    },
+    /// Re-run `kiln fmt --check` on every relevant change.
+    Fmt,
+}
+
+impl WatchTarget {
+    fn into_watch_subcommand(self) -> watch::WatchSubcommand {
+        match self {
+            WatchTarget::Check => watch::WatchSubcommand::Check,
+            WatchTarget::Build => watch::WatchSubcommand::Build,
+            WatchTarget::Test { filters } => watch::WatchSubcommand::Test(filters),
+            WatchTarget::Fmt => watch::WatchSubcommand::Fmt,
+        }
+    }
+}
+
+#[derive(Debug, Subcommand)]
 enum LintSubcommand {
     /// List all known lint rules.
     List,
@@ -312,6 +420,7 @@ enum LintSubcommand {
 
 impl Cli {
     pub fn run(self) -> Result<()> {
+        let _ = LOCK_MODE.set(self.lock_mode());
         match self.command {
             Command::New { name, path } => new::run_new(&name, path.as_deref()),
             Command::Init { name } => new::run_init(name.as_deref()),
@@ -381,23 +490,30 @@ impl Cli {
                 skip_passed,
                 trace,
                 profile,
+                reporter,
                 features,
-            } => test::run(test::Args {
-                filters,
-                exact,
-                skip,
-                tag,
-                jobs,
-                no_fail_fast,
-                list,
-                nocapture,
-                show_output,
-                rerun,
-                skip_passed,
-                trace,
-                profile,
-                features,
-            }),
+            } => {
+                let reporter_kind = reporter
+                    .parse::<test::ReporterKind>()
+                    .map_err(anyhow::Error::msg)?;
+                test::run(test::Args {
+                    filters,
+                    exact,
+                    skip,
+                    tag,
+                    jobs,
+                    no_fail_fast,
+                    list,
+                    nocapture,
+                    show_output,
+                    rerun,
+                    skip_passed,
+                    trace,
+                    profile,
+                    features,
+                    reporter: reporter_kind,
+                })
+            }
             Command::Doc {
                 open,
                 profile,
@@ -410,6 +526,7 @@ impl Cli {
             Command::Schema => schema::run(),
             Command::Env => env::run(),
             Command::Doctor => doctor::run(),
+            Command::Watch { subcommand } => watch::run(subcommand.into_watch_subcommand()),
             Command::Wave { test, print_path } => wave::run(test, print_path),
             Command::Lsp => lsp::run(),
             Command::InstallTools {

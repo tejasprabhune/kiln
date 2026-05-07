@@ -5,6 +5,7 @@ use clap::Parser;
 
 mod commands;
 mod hooks;
+mod junit;
 mod render;
 mod reporter;
 
