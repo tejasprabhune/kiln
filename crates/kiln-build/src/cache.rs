@@ -111,6 +111,7 @@ mod tests {
             libraries: vec![],
             verilator_lint_flags: vec![],
             extra_verilator_args: vec![],
+            verilator_options: Default::default(),
         }
     }
 

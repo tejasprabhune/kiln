@@ -174,10 +174,38 @@ fn build_command(
         .arg(format!("V{}", plan.top));
     if matches!(plan.profile, Profile::Release) {
         cmd.arg("-O3");
-        cmd.arg("--x-assign").arg("0");
+        // User-set x_assign takes precedence; otherwise keep the historical
+        // release default of `--x-assign 0`.
+        if plan.verilator_options.x_assign.is_none() {
+            cmd.arg("--x-assign").arg("0");
+        }
+    }
+    if let Some(x) = &plan.verilator_options.x_assign {
+        cmd.arg("--x-assign").arg(x);
+    }
+    if plan.verilator_options.timing {
+        cmd.arg("--timing");
+    }
+    if plan.verilator_options.bbox_unsup {
+        cmd.arg("--bbox-unsup");
+    }
+    if let Some(n) = plan.verilator_options.threads {
+        cmd.arg("--threads").arg(n.to_string());
+    }
+    if plan.verilator_options.coverage {
+        cmd.arg("--coverage");
     }
     if plan.trace {
         cmd.arg("--trace").arg("--trace-fst");
+        if plan.verilator_options.trace_structs {
+            cmd.arg("--trace-structs");
+        }
+        if plan.verilator_options.trace_params {
+            cmd.arg("--trace-params");
+        }
+        if let Some(d) = plan.verilator_options.trace_depth {
+            cmd.arg("--trace-depth").arg(d.to_string());
+        }
     }
     if let Some(ts) = &plan.timescale {
         cmd.arg("--timescale").arg(ts);
@@ -295,9 +323,7 @@ pub fn compile(plan: &BuildPlan) -> Result<VerilatorOutcome, BackendError> {
     // `Error: Invalid Option: --binary`. We didn't catch those at
     // version-probe time (e.g. probe failed). Retry once with the
     // explicit older flag set.
-    if stderr.contains("Invalid Option: --binary")
-        || stdout.contains("Invalid Option: --binary")
-    {
+    if stderr.contains("Invalid Option: --binary") || stdout.contains("Invalid Option: --binary") {
         let (s_out, s_err, code) =
             run_verilator(&verilator, &dir, plan, CompileMode::MainExeBuild)?;
         stdout = s_out;
@@ -564,5 +590,123 @@ mod tests {
     fn unknown_severity_is_ignored() {
         let line = "%Mystery: foo.sv:1:1: ?";
         assert!(parse_diagnostic_line(line).is_none());
+    }
+
+    fn cmd_args_contain(plan: &BuildPlan, expected: &[&str]) -> bool {
+        let cmd = build_command(
+            Path::new("/bin/echo"),
+            Path::new("/tmp"),
+            plan,
+            CompileMode::MainExeBuild,
+        )
+        .unwrap();
+        let args: Vec<String> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        for needle in expected {
+            if !args.iter().any(|a| a == needle) {
+                eprintln!("missing {needle:?} in {args:?}");
+                return false;
+            }
+        }
+        true
+    }
+
+    fn cmd_args(plan: &BuildPlan) -> Vec<String> {
+        build_command(
+            Path::new("/bin/echo"),
+            Path::new("/tmp"),
+            plan,
+            CompileMode::MainExeBuild,
+        )
+        .unwrap()
+        .get_args()
+        .map(|a| a.to_string_lossy().into_owned())
+        .collect()
+    }
+
+    fn base_plan() -> BuildPlan {
+        BuildPlan {
+            project_root: PathBuf::from("/p"),
+            top: "t".into(),
+            sources: vec![],
+            include_dirs: vec![],
+            defines: Default::default(),
+            profile: Profile::Debug,
+            trace: false,
+            timescale: None,
+            language: None,
+            libraries: vec![],
+            verilator_lint_flags: vec![],
+            extra_verilator_args: vec![],
+            verilator_options: Default::default(),
+        }
+    }
+
+    #[test]
+    fn timing_and_bbox_unsup_flags_emitted() {
+        let mut plan = base_plan();
+        plan.verilator_options.timing = true;
+        plan.verilator_options.bbox_unsup = true;
+        assert!(cmd_args_contain(&plan, &["--timing", "--bbox-unsup"]));
+    }
+
+    #[test]
+    fn x_assign_user_value_wins_over_release_default() {
+        let mut plan = base_plan();
+        plan.profile = Profile::Release;
+        plan.verilator_options.x_assign = Some("unique".into());
+        let args = cmd_args(&plan);
+        // `--x-assign unique` present, `--x-assign 0` absent.
+        let positions: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.as_str() == "--x-assign")
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(positions.len(), 1, "got args: {args:?}");
+        assert_eq!(args[positions[0] + 1], "unique");
+    }
+
+    #[test]
+    fn release_keeps_x_assign_zero_when_unset() {
+        let mut plan = base_plan();
+        plan.profile = Profile::Release;
+        let args = cmd_args(&plan);
+        let pos = args.iter().position(|a| a == "--x-assign").unwrap();
+        assert_eq!(args[pos + 1], "0");
+    }
+
+    #[test]
+    fn trace_substructure_flags_only_when_tracing() {
+        let mut plan = base_plan();
+        plan.verilator_options.trace_structs = true;
+        plan.verilator_options.trace_params = true;
+        plan.verilator_options.trace_depth = Some(8);
+        // trace = false → none of the trace-* flags should appear.
+        let args = cmd_args(&plan);
+        assert!(!args.iter().any(|a| a == "--trace-structs"));
+        assert!(!args.iter().any(|a| a == "--trace-params"));
+        assert!(!args.iter().any(|a| a == "--trace-depth"));
+
+        plan.trace = true;
+        let args = cmd_args(&plan);
+        assert!(args.iter().any(|a| a == "--trace"));
+        assert!(args.iter().any(|a| a == "--trace-structs"));
+        assert!(args.iter().any(|a| a == "--trace-params"));
+        let pos = args.iter().position(|a| a == "--trace-depth").unwrap();
+        assert_eq!(args[pos + 1], "8");
+    }
+
+    #[test]
+    fn threads_and_coverage_emitted() {
+        let mut plan = base_plan();
+        plan.verilator_options.threads = Some(4);
+        plan.verilator_options.coverage = true;
+        let args = cmd_args(&plan);
+        let pos = args.iter().position(|a| a == "--threads").unwrap();
+        assert_eq!(args[pos + 1], "4");
+        assert!(args.iter().any(|a| a == "--coverage"));
     }
 }

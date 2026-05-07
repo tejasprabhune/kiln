@@ -40,6 +40,13 @@ pub(crate) fn build_request(resolved: &ResolvedConfig, source_set: &SourceSet) -
     use kiln_core::SvLanguage;
 
     let mut req = CompileRequest::builder().top(&resolved.design.top);
+    // Slang accepts multiple `--top` flags. Auxiliary tops (e.g. Xilinx
+    // `glbl`) are passed via extra_arg to keep the slang-rs builder API
+    // single-top.
+    for aux in &resolved.design.aux_tops {
+        req = req.extra_arg("--top".to_string());
+        req = req.extra_arg(aux.clone());
+    }
     for s in source_set.files() {
         req = req.source(s.clone());
     }
@@ -265,6 +272,32 @@ mod tests {
         let pos = args.iter().position(|a| a == "-y");
         assert!(pos.is_some(), "-y not found in slang args: {args:?}");
         assert_eq!(args[pos.unwrap() + 1], "vendor/lib");
+    }
+
+    #[test]
+    fn aux_tops_become_additional_top_flags() {
+        let (r, ss) = resolved(
+            r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+            [design]
+            top = "z1top"
+            aux_tops = ["glbl", "BUFG_helper"]
+            "#,
+        );
+        let req = build_request(&r, &ss);
+        let args = req.extra_args();
+        // Two `--top` extra args, with the aux names following.
+        let positions: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.as_str() == "--top")
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(positions.len(), 2, "expected 2 extra `--top`: {args:?}");
+        assert_eq!(args[positions[0] + 1], "glbl");
+        assert_eq!(args[positions[1] + 1], "BUFG_helper");
     }
 
     #[test]

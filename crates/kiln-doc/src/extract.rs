@@ -85,6 +85,10 @@ pub fn extract(
     let req = {
         use kiln_core::SvLanguage;
         let mut b = CompileRequest::builder().top(&manifest.design.top);
+        for aux in &manifest.design.aux_tops {
+            b = b.extra_arg("--top".to_string());
+            b = b.extra_arg(aux.clone());
+        }
         for f in source_set.files() {
             b = b.source(f.clone());
         }
