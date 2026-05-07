@@ -5,11 +5,12 @@ use std::time::Instant;
 use anyhow::{anyhow, bail, Context, Result};
 
 use kiln_build::SourceSet;
-use kiln_core::{find_manifest, Manifest, ResolvedConfig};
+use kiln_core::{find_manifest, HookPhase, Manifest, ResolvedConfig};
 use slang_rs::Slang;
 
 use crate::commands::build::fmt_elapsed;
 use crate::commands::{apply_feature_flags, FeatureFlags};
+use crate::hooks;
 use crate::render;
 use crate::reporter;
 
@@ -32,6 +33,7 @@ pub fn run(
         .parent()
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
+    hooks::run_pre_hook(&project_root, &manifest.hooks, HookPhase::PreCheck)?;
     let resolved = ResolvedConfig::resolve(&manifest, profile_name);
     let source_set = SourceSet::resolve(&project_root, &manifest)?;
 

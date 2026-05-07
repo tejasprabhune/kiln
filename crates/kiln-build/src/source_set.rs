@@ -36,12 +36,21 @@ pub struct SourceSet {
 }
 
 impl SourceSet {
-    /// Resolve `manifest.design.sources` against `project_root`.
+    /// Resolve `manifest.design.sources` plus every
+    /// `[vendor.<name>] sim_models` and `stubs` glob against
+    /// `project_root`. Vendor sources are appended in vendor-name order
+    /// after all design sources, with cross-set deduplication.
     pub fn resolve(project_root: &Path, manifest: &Manifest) -> Result<Self, SourceSetError> {
         let mut files: Vec<PathBuf> = Vec::new();
         let mut seen: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
 
-        for raw_glob in &manifest.design.sources {
+        let mut all_globs: Vec<String> = manifest.design.sources.clone();
+        for vendor in manifest.vendor.values() {
+            all_globs.extend(vendor.sim_models.iter().cloned());
+            all_globs.extend(vendor.stubs.iter().cloned());
+        }
+
+        for raw_glob in &all_globs {
             let pattern = if Path::new(raw_glob).is_absolute() {
                 raw_glob.clone()
             } else {

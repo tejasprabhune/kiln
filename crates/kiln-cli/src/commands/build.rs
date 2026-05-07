@@ -9,10 +9,11 @@ use anyhow::{anyhow, bail, Context, Result};
 use kiln_build::backend::verilator;
 use kiln_build::{BuildPlan, SourceSet};
 use kiln_core::ResolvedConfig;
-use kiln_core::{find_manifest, Manifest};
+use kiln_core::{find_manifest, HookPhase, Manifest};
 use kiln_deps::ResolvedSources;
 
 use crate::commands::{apply_feature_flags, FeatureFlags};
+use crate::hooks;
 use crate::render;
 use crate::reporter;
 
@@ -35,6 +36,8 @@ pub fn run_build(
         .parent()
         .ok_or_else(|| anyhow!("manifest path {} has no parent", manifest_path.display()))?
         .to_path_buf();
+
+    hooks::run_pre_hook(&project_root, &manifest.hooks, HookPhase::PreBuild)?;
 
     let resolved = ResolvedConfig::resolve(&manifest, profile_name);
 
@@ -63,6 +66,7 @@ pub fn run_build(
         kiln_build::Profile::Debug
     };
     let mut plan = BuildPlan::from_resolved(&resolved, &source_set, profile);
+    plan.blackbox_modules = kiln_build::aggregate_blackbox_modules(&manifest);
     for d in dep_include_dirs {
         if !plan.include_dirs.contains(&d) {
             plan.include_dirs.push(d);

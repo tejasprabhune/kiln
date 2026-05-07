@@ -407,11 +407,12 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "kiln-sv"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "clap",
+ "glob",
  "insta",
  "kiln-sv-build",
  "kiln-sv-core",
@@ -435,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-build"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "blake3",
@@ -452,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "glob",
  "insta",
@@ -470,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-deps"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "glob",
  "insta",
@@ -486,7 +487,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-doc"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "kiln-sv-build",
  "kiln-sv-core",
@@ -498,7 +499,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-fmt"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "insta",
  "kiln-sv-core",
@@ -511,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-lint"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "kiln-sv-build",
  "kiln-sv-core",
@@ -523,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-test"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "glob",
  "kiln-sv-build",
@@ -538,7 +539,7 @@ dependencies = [
 
 [[package]]
 name = "kiln-sv-wave"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "kiln-sv-core",
  "tempfile",
@@ -888,7 +889,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 
 [[package]]
 name = "slang-sv-rs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "insta",
  "serde",

@@ -43,3 +43,10 @@ test:
   matrix: []
 features:
   default: []
+vendor: {}
+firmware: []
+hooks:
+  pre-check: ~
+  pre-build: ~
+  pre-test: ~
+  post-test: ~

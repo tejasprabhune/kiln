@@ -59,6 +59,10 @@ pub struct BuildPlan {
     /// First-class `[tool.verilator]` knobs, lifted out of `extra_args`.
     #[serde(default)]
     pub verilator_options: VerilatorOptions,
+    /// Module names to pass as `--bbox <name>` to verilator. Aggregated
+    /// from every `[vendor.<name>].blackbox_modules` block.
+    #[serde(default)]
+    pub blackbox_modules: Vec<String>,
 }
 
 /// First-class verilator flags surfaced in `[tool.verilator]`. Each field
@@ -97,7 +101,9 @@ pub struct VerilatorOptions {
 impl BuildPlan {
     pub fn new(manifest: &Manifest, source_set: &SourceSet, profile: Profile) -> Self {
         let resolved = ResolvedConfig::resolve(manifest, profile.as_str());
-        Self::from_resolved(&resolved, source_set, profile)
+        let mut plan = Self::from_resolved(&resolved, source_set, profile);
+        plan.blackbox_modules = aggregate_blackbox_modules(manifest);
+        plan
     }
 
     /// Construct a plan from an already-resolved config.
@@ -144,6 +150,7 @@ impl BuildPlan {
                 .collect(),
             verilator_lint_flags: build_verilator_lint_flags(&resolved.lint),
             extra_verilator_args: resolved.tool_verilator.extra_args.clone(),
+            blackbox_modules: Vec::new(),
             verilator_options: VerilatorOptions {
                 timing: resolved.tool_verilator.timing,
                 x_assign: resolved
@@ -172,6 +179,21 @@ impl BuildPlan {
         }
         self
     }
+}
+
+/// Collect every `[vendor.<name>].blackbox_modules` entry into a
+/// deduplicated `Vec<String>`, preserving first-seen order.
+pub fn aggregate_blackbox_modules(manifest: &Manifest) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for vendor in manifest.vendor.values() {
+        for name in &vendor.blackbox_modules {
+            if seen.insert(name.clone()) {
+                out.push(name.clone());
+            }
+        }
+    }
+    out
 }
 
 /// Translate `[lint.verilator]` rules into `-Wno-NAME` / `-Wwarn-NAME` /
@@ -248,6 +270,31 @@ mod tests {
         assert_eq!(plan.timescale.as_deref(), Some("1ns/1ps"));
         assert_eq!(plan.language.as_deref(), Some("1800-2017"));
         assert_eq!(plan.libraries, vec![PathBuf::from("/proj/vendor/lib")]);
+    }
+
+    #[test]
+    fn aggregate_blackbox_modules_dedupes_across_vendors() {
+        let m: Manifest = r#"
+            [package]
+            name = "p"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [vendor.xilinx]
+            blackbox_modules = ["MMCME2_ADV", "PLLE2_ADV"]
+            [vendor.altera]
+            blackbox_modules = ["PLLE2_ADV", "altpll"]
+        "#
+        .parse()
+        .unwrap();
+        let names = aggregate_blackbox_modules(&m);
+        assert!(names.contains(&"MMCME2_ADV".to_string()));
+        assert!(names.contains(&"altpll".to_string()));
+        // PLLE2_ADV listed twice across vendors should appear once.
+        assert_eq!(
+            names.iter().filter(|n| n.as_str() == "PLLE2_ADV").count(),
+            1
+        );
     }
 
     #[test]

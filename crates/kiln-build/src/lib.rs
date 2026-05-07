@@ -28,7 +28,7 @@ pub mod source_set;
 pub use backend::BackendError;
 pub use cache::{cache_dir, BuildCacheKey};
 pub use diagnostic::{BuildDiagnostic, Severity};
-pub use plan::{BuildPlan, Profile};
+pub use plan::{aggregate_blackbox_modules, BuildPlan, Profile};
 pub use source_set::{SourceSet, SourceSetError};
 
 use thiserror::Error;

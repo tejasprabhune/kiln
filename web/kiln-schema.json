@@ -1,0 +1,341 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "additionalProperties": false,
+  "description": "Manifest for a kiln SystemVerilog project",
+  "properties": {
+    "dependencies": {
+      "additionalProperties": true,
+      "description": "Bender-compatible dependency entries",
+      "type": "object"
+    },
+    "design": {
+      "additionalProperties": false,
+      "properties": {
+        "defines": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "include_dirs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "language": {
+          "enum": [
+            "sv2005",
+            "sv2009",
+            "sv2012",
+            "sv2017",
+            "sv2023"
+          ],
+          "type": "string"
+        },
+        "libraries": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sources": {
+          "default": [
+            "src/**/*.sv",
+            "src/**/*.svh",
+            "src/**/*.v"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "test_sources": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timescale": {
+          "description": "e.g. \"1ns/1ps\"",
+          "type": "string"
+        },
+        "top": {
+          "description": "Top module name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "top"
+      ],
+      "type": "object"
+    },
+    "lint": {
+      "additionalProperties": {
+        "enum": [
+          "error",
+          "warn",
+          "off",
+          "deny"
+        ],
+        "type": "string"
+      },
+      "description": "Lint severity overrides",
+      "properties": {
+        "slang": {
+          "additionalProperties": {
+            "enum": [
+              "error",
+              "warn",
+              "off",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "description": "Slang-specific lint rules",
+          "type": "object"
+        },
+        "verilator": {
+          "additionalProperties": {
+            "enum": [
+              "error",
+              "warn",
+              "off",
+              "deny"
+            ],
+            "type": "string"
+          },
+          "description": "Verilator-specific lint rules (WIDTHTRUNC-style names)",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "package": {
+      "additionalProperties": false,
+      "properties": {
+        "authors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "description": {
+          "type": "string"
+        },
+        "license": {
+          "type": "string"
+        },
+        "name": {
+          "description": "Package name (valid SV identifier)",
+          "type": "string"
+        },
+        "version": {
+          "description": "Semver version string",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "type": "object"
+    },
+    "profile": {
+      "additionalProperties": {
+        "additionalProperties": false,
+        "properties": {
+          "lint": {
+            "additionalProperties": {
+              "enum": [
+                "error",
+                "warn",
+                "off",
+                "deny"
+              ],
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "tool": {
+            "additionalProperties": false,
+            "properties": {
+              "slang": {
+                "additionalProperties": false,
+                "properties": {
+                  "extra_args": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "verible": {
+                "additionalProperties": false,
+                "properties": {
+                  "extra_args": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "verilator": {
+                "additionalProperties": false,
+                "properties": {
+                  "coverage": {
+                    "type": "boolean"
+                  },
+                  "extra_args": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "threads": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "trace": {
+                    "description": "Trace output format: false (off), \"vcd\", or \"fst\"",
+                    "oneOf": [
+                      {
+                        "enum": [
+                          false
+                        ],
+                        "type": "boolean"
+                      },
+                      {
+                        "enum": [
+                          "vcd",
+                          "fst"
+                        ],
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      },
+      "description": "Named build profiles (dev, release, test, or custom)",
+      "type": "object"
+    },
+    "tool": {
+      "additionalProperties": false,
+      "properties": {
+        "slang": {
+          "additionalProperties": false,
+          "properties": {
+            "extra_args": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "verible": {
+          "additionalProperties": false,
+          "properties": {
+            "extra_args": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "path": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "verilator": {
+          "additionalProperties": false,
+          "properties": {
+            "coverage": {
+              "type": "boolean"
+            },
+            "extra_args": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "path": {
+              "type": "string"
+            },
+            "threads": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "trace": {
+              "description": "Trace output format: false (off), \"vcd\", or \"fst\"",
+              "oneOf": [
+                {
+                  "enum": [
+                    false
+                  ],
+                  "type": "boolean"
+                },
+                {
+                  "enum": [
+                    "vcd",
+                    "fst"
+                  ],
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "wave": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled_by_default": {
+          "type": "boolean"
+        },
+        "format": {
+          "enum": [
+            "fst",
+            "vcd"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "package",
+    "design"
+  ],
+  "title": "Kiln.toml",
+  "type": "object"
+}

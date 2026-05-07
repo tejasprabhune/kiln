@@ -189,6 +189,9 @@ fn build_command(
     if plan.verilator_options.bbox_unsup {
         cmd.arg("--bbox-unsup");
     }
+    for module in &plan.blackbox_modules {
+        cmd.arg("--bbox").arg(module);
+    }
     if let Some(n) = plan.verilator_options.threads {
         cmd.arg("--threads").arg(n.to_string());
     }
@@ -641,6 +644,7 @@ mod tests {
             verilator_lint_flags: vec![],
             extra_verilator_args: vec![],
             verilator_options: Default::default(),
+            blackbox_modules: vec![],
         }
     }
 
@@ -697,6 +701,22 @@ mod tests {
         assert!(args.iter().any(|a| a == "--trace-params"));
         let pos = args.iter().position(|a| a == "--trace-depth").unwrap();
         assert_eq!(args[pos + 1], "8");
+    }
+
+    #[test]
+    fn blackbox_modules_emit_bbox_flags() {
+        let mut plan = base_plan();
+        plan.blackbox_modules = vec!["MMCME2_ADV".into(), "PLLE2_ADV".into()];
+        let args = cmd_args(&plan);
+        let positions: Vec<usize> = args
+            .iter()
+            .enumerate()
+            .filter(|(_, a)| a.as_str() == "--bbox")
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(positions.len(), 2, "got args: {args:?}");
+        assert_eq!(args[positions[0] + 1], "MMCME2_ADV");
+        assert_eq!(args[positions[1] + 1], "PLLE2_ADV");
     }
 
     #[test]

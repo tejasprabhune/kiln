@@ -73,6 +73,17 @@
     </nav>
   </header>
 
+  <p style="margin-top: 24px; padding: 12px 16px; border-left: 3px solid var(--brown); background: rgba(139, 90, 60, 0.05); border-radius: 4px;">
+    <strong>Editor autocomplete:</strong> a JSON Schema for <code>Kiln.toml</code>
+    is published at
+    <a href="kiln-schema.json"><code>https://tejasprabhune.github.io/kiln/kiln-schema.json</code></a>.
+    Add <code>#:schema https://tejasprabhune.github.io/kiln/kiln-schema.json</code>
+    as the first line of your <code>Kiln.toml</code> and any TOML LSP that
+    honours the <code>#:schema</code> directive (taplo, helix, Even Better
+    TOML, etc.) will load it. Run <code>kiln schema</code> to inspect the
+    schema offline.
+  </p>
+
   <!-- [package] -->
   <h2><code>[package]</code></h2>
   <table class="field-table">
@@ -473,6 +484,123 @@ sources = ["src/debug/**/*.sv"]</code></pre>
     <code>--features sim,debug</code> activates listed features on top of
     the default set; <code>--all-features</code> activates every defined feature;
     <code>--no-default-features</code> starts from an empty selection.
+  </p>
+
+  <!-- [vendor.<name>] -->
+  <h2><code>[vendor.&lt;name&gt;]</code></h2>
+  <p>
+    Group vendor libraries (Xilinx unisims, Altera megafunctions, custom
+    stub sets) under a named block. Each block contributes sim-model
+    sources, synth-only stubs, and verilator blackbox names.
+  </p>
+  <pre><code>[vendor.xilinx]
+sim_models       = ["hardware/sim_models/BUFG.sv", "hardware/sim_models/glbl.sv"]
+stubs            = ["hardware/stubs/PLLE2_ADV.sv"]
+blackbox_modules = ["MMCME2_ADV", "PLLE2_ADV"]</code></pre>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Default</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>sim_models</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of glob strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+      <tr>
+        <td><code>stubs</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of glob strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+      <tr>
+        <td><code>blackbox_modules</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>list of strings</td>
+        <td><span class="default"><code>[]</code></span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    <code>sim_models</code> and <code>stubs</code> globs are appended to the
+    resolved source set today; the field names telegraph that a future
+    synthesis backend will keep <code>stubs</code> out of simulation.
+    Each entry in <code>blackbox_modules</code> becomes <code>--bbox &lt;name&gt;</code>
+    to verilator so the module body is not compiled.
+  </p>
+
+  <!-- [[firmware]] -->
+  <h2><code>[[firmware]]</code></h2>
+  <p>
+    Embedded firmware artifacts produced by an external build system and
+    consumed by RTL tests. <code>kiln test</code> runs every declared
+    firmware build once (deduped by <code>(path, build)</code>) before any
+    per-test <code>prebuild</code>.
+  </p>
+  <pre><code>[[firmware]]
+name = "isa_tests"
+path = "software/riscv-isa-tests"
+build = "make"
+artifacts = "*.hex"</code></pre>
+  <table class="field-table">
+    <thead>
+      <tr><th>Key</th><th></th><th>Type</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>name</code></td>
+        <td><span class="req">required</span></td>
+        <td>string</td>
+        <td>Free-form identifier, must be a valid SystemVerilog identifier.</td>
+      </tr>
+      <tr>
+        <td><code>path</code></td>
+        <td><span class="req">required</span></td>
+        <td>path</td>
+        <td>Directory the build runs in, relative to project root.</td>
+      </tr>
+      <tr>
+        <td><code>build</code></td>
+        <td><span class="req">required</span></td>
+        <td>string</td>
+        <td>Shell command run inside <code>path</code>.</td>
+      </tr>
+      <tr>
+        <td><code>artifacts</code></td>
+        <td><span class="opt">optional</span></td>
+        <td>string</td>
+        <td>Glob (relative to <code>path</code>) describing produced files.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- [hooks] -->
+  <h2><code>[hooks]</code></h2>
+  <p>
+    Project-level shell escapes for kiln subcommand lifecycle phases.
+    Each value is a single shell line executed at the project root.
+    Empty strings are treated as unset.
+  </p>
+  <pre><code>[hooks]
+pre-check  = ""
+pre-build  = "make -C ip/"
+pre-test   = "git submodule update --init"
+post-test  = "echo done"</code></pre>
+  <table class="field-table">
+    <thead>
+      <tr><th>Phase</th><th>Fires</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>pre-check</code></td><td>Before slang elaboration in <code>kiln check</code>.</td></tr>
+      <tr><td><code>pre-build</code></td><td>Before verilator in <code>kiln build</code> (and the build phase of <code>kiln run</code> / <code>kiln test</code>).</td></tr>
+      <tr><td><code>pre-test</code></td><td>Before any testbench is started by <code>kiln test</code>.</td></tr>
+      <tr><td><code>post-test</code></td><td>After <code>kiln test</code> finishes (regardless of pass/fail).</td></tr>
+    </tbody>
+  </table>
+  <p>
+    Pre-* hook failures abort the parent subcommand. <code>post-test</code>
+    failures are logged but never change the test outcome.
   </p>
 
   <!-- [wave] -->

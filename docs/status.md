@@ -3,6 +3,87 @@
 > Living status doc. Each session that ships milestone work appends a section
 > below. The most recent section is the current state.
 
+## 2026-05-06 — M11 (Vendor / firmware / hooks + doctor)
+
+**Branch:** `milestone/m11-vendor-firmware-hooks`
+**ADR:** `docs/decisions/0006-vendor-firmware-hooks-m11.md`
+
+### Summary
+
+Finishes the EE 151-evidence-driven Bucket 1 work started in M10. After
+this milestone, every load-bearing pattern in the user's reference
+manifest has a typed home in `Kiln.toml`:
+
+- `[vendor.<name>]` blocks group sim-models, stubs, and verilator
+  blackbox modules. Sources fan out into the resolved source set
+  automatically; `blackbox_modules` aggregate across vendors and become
+  `--bbox <name>` flags to verilator.
+- `[[firmware]]` declares embedded software builds. `kiln test` runs
+  every declared firmware build once (deduped by `(path, build)`)
+  before any per-test `prebuild`.
+- `[hooks]` exposes `pre-check`, `pre-build`, `pre-test`, `post-test`
+  shell escapes at the project level. Pre-* failures abort the parent
+  subcommand; `post-test` failures are logged but never change test
+  outcomes.
+
+Operational UX additions:
+
+- `kiln env` prints discovered external tools (slang, verilator,
+  verible, bender, surfer) with version + path, plus the kiln and
+  rustc versions.
+- `kiln doctor` extends `kiln env` with manifest, lockfile, vendor,
+  firmware, and hooks sanity checks. Exits non-zero on the first
+  hard-error finding so CI can gate on it.
+- A JSON Schema for `Kiln.toml` is now published at
+  `https://tejasprabhune.github.io/kiln/kiln-schema.json` and is
+  regenerated on every release. Editor users can pin
+  `#:schema https://tejasprabhune.github.io/kiln/kiln-schema.json` at
+  the top of their manifest for autocomplete in any TOML LSP that
+  honours the directive (taplo, helix, Even Better TOML, etc.).
+
+### Acceptance criteria
+
+| Criterion | Status | Evidence |
+| --------- | ------ | -------- |
+| `[vendor.<name>]` round-trips and contributes sources | pass | `crates/kiln-core/src/manifest.rs` `vendor_block_round_trips`; `crates/kiln-build/src/source_set.rs` integration |
+| `blackbox_modules` aggregate + dedupe across vendors | pass | `crates/kiln-build/src/plan.rs` `aggregate_blackbox_modules_dedupes_across_vendors` |
+| `--bbox <name>` reaches verilator | pass | `crates/kiln-build/src/backend/verilator.rs` `blackbox_modules_emit_bbox_flags` |
+| `[[firmware]]` parses + invalid/duplicate names error | pass | `firmware_round_trips`, `firmware_invalid_name_errors`, `firmware_duplicate_name_errors` |
+| `kiln test` runs firmware builds upfront, deduped | pass | `crates/kiln-test/src/lib.rs` `firmware_build_runs_command_and_dedupes` |
+| Firmware build failures surface in errors map | pass | `firmware_build_failure_surfaces_in_errors_map` |
+| `[hooks]` parses, empty strings = unset, unknown phases rejected | pass | `hooks_round_trip_and_empty_strings_treated_as_unset`, `hooks_unknown_phase_rejected_by_deny_unknown_fields` |
+| `kiln env` and `kiln doctor` work end-to-end | pass | manual smoke against `examples/hello-counter` |
+| JSON Schema published at `web/kiln-schema.json` | pass | regenerated from `kiln schema` and committed |
+
+### ADRs filed
+
+- `docs/decisions/0006-vendor-firmware-hooks-m11.md` — **accepted**.
+
+### Backlog (deferred to future milestones, listed for next session)
+
+Each is a separate milestone + ADR per `CLAUDE.md` rules:
+
+- Workspace support (multiple packages per repo).
+- `kiln watch <subcommand>` — file-watch development loop.
+- `--format json` for `kiln check`, `kiln test`, `kiln tree`,
+  `kiln build`. Today only `kiln fmt` and `kiln schema` emit JSON.
+- JUnit XML reporter for `kiln test`.
+- `kiln check --fix` for auto-fixable lints.
+- `kiln-toolchain.toml` for pinning slang/verilator/verible per project.
+- `--frozen` / `--locked` modes for CI determinism.
+- `kiln init --import-filelist verilator.f` and
+  `kiln init --import-vivado <project>.xpr` migration accelerators.
+- `kiln new --template <fpga-zynq | uvm | riscv-soc>` templates.
+- `kiln package` reproducible bug bundle.
+- VS Code extension surfacing the manifest schema, test runner, and
+  wave viewer.
+- Multi-simulator backend abstraction (VCS / Xcelium / Questa /
+  icarus). Verilator-only is fine for now but the BuildPlan should
+  declare its backend.
+- `kiln self update`.
+- Per-vendor sim/synth source split when a synthesis backend lands.
+- `kiln firmware build <name>` / `kiln firmware list` subcommands.
+
 ## 2026-05-06 — M10 (Schema extensibility)
 
 **Branch:** `milestone/m10-schema-extensibility`

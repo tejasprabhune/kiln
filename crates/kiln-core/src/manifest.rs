@@ -56,6 +56,15 @@ pub enum ManifestError {
          start with a letter or `_` and contain only letters, digits, or `_`)"
     )]
     InvalidFeatureName(String),
+
+    #[error(
+        "firmware name `{0}` is not a valid SystemVerilog identifier (must \
+         start with a letter or `_` and contain only letters, digits, or `_`)"
+    )]
+    InvalidFirmwareName(String),
+
+    #[error("duplicate firmware name `{0}`")]
+    DuplicateFirmwareName(String),
 }
 
 /// A `Kiln.toml` manifest.
@@ -81,6 +90,108 @@ pub struct Manifest {
     pub test: TestConfig,
     #[serde(default)]
     pub features: FeaturesConfig,
+    /// Vendor libraries (Xilinx unisims, Altera megafunctions, custom
+    /// stub sets). Keyed by vendor name; each block contributes
+    /// sim-model sources, stub sources, and verilator blackbox names.
+    #[serde(default)]
+    pub vendor: BTreeMap<String, Vendor>,
+    /// Embedded firmware artifacts produced by an external build
+    /// system and consumed by RTL tests. `kiln test` runs each
+    /// declared firmware build (deduped) once before the test pass.
+    #[serde(default)]
+    pub firmware: Vec<Firmware>,
+    /// Project-level shell escapes for kiln subcommand lifecycle
+    /// phases. See [`Hooks`] for the supported phases.
+    #[serde(default)]
+    pub hooks: Hooks,
+}
+
+/// One `[vendor.<name>]` block.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Vendor {
+    /// Glob patterns for vendor sim-model sources, appended to the
+    /// resolved source set.
+    #[serde(default)]
+    pub sim_models: Vec<String>,
+    /// Glob patterns for synth-only stubs, appended to the resolved
+    /// source set today; future synthesis backends will keep these
+    /// out of simulation.
+    #[serde(default)]
+    pub stubs: Vec<String>,
+    /// Module names to pass as `--bbox <name>` to verilator so its
+    /// body is treated as a black box during compilation.
+    #[serde(default)]
+    pub blackbox_modules: Vec<String>,
+}
+
+/// One `[[firmware]]` entry.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Firmware {
+    /// Free-form identifier; must be a valid SystemVerilog identifier.
+    pub name: String,
+    /// Directory containing the firmware build, relative to the
+    /// project root.
+    pub path: PathBuf,
+    /// Shell command run inside `path` to build the firmware.
+    pub build: String,
+    /// Glob (relative to `path`) describing produced artifacts, used
+    /// for documentation and future `kiln firmware list <name>`.
+    #[serde(default)]
+    pub artifacts: Option<String>,
+}
+
+/// `[hooks]` table — single-shell-line escapes per lifecycle phase.
+///
+/// Empty strings are treated as unset.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Hooks {
+    /// Runs before slang elaboration in `kiln check`.
+    #[serde(default)]
+    pub pre_check: Option<String>,
+    /// Runs before verilator in `kiln build` (and the build phase of
+    /// `kiln run` / `kiln test`).
+    #[serde(default)]
+    pub pre_build: Option<String>,
+    /// Runs before any testbench is started by `kiln test`.
+    #[serde(default)]
+    pub pre_test: Option<String>,
+    /// Runs after `kiln test` finishes, regardless of pass/fail.
+    /// Failures are logged but do not change the test outcome.
+    #[serde(default)]
+    pub post_test: Option<String>,
+}
+
+impl Hooks {
+    /// Returns the hook command for a phase, treating empty strings as
+    /// "no hook configured."
+    pub fn for_phase(&self, phase: HookPhase) -> Option<&str> {
+        let raw = match phase {
+            HookPhase::PreCheck => self.pre_check.as_deref(),
+            HookPhase::PreBuild => self.pre_build.as_deref(),
+            HookPhase::PreTest => self.pre_test.as_deref(),
+            HookPhase::PostTest => self.post_test.as_deref(),
+        };
+        raw.and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t)
+            }
+        })
+    }
+}
+
+/// Lifecycle phases recognised by [`Hooks::for_phase`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookPhase {
+    PreCheck,
+    PreBuild,
+    PreTest,
+    PostTest,
 }
 
 /// `[features]` table — cargo-style conditional compilation toggles.
@@ -747,6 +858,16 @@ impl Manifest {
         for name in &self.features.default {
             if !self.features.features.contains_key(name) {
                 return Err(ManifestError::UnknownFeature(name.clone()));
+            }
+        }
+        let mut firmware_names: std::collections::BTreeSet<&str> =
+            std::collections::BTreeSet::new();
+        for fw in &self.firmware {
+            if !is_valid_sv_identifier(&fw.name) {
+                return Err(ManifestError::InvalidFirmwareName(fw.name.clone()));
+            }
+            if !firmware_names.insert(&fw.name) {
+                return Err(ManifestError::DuplicateFirmwareName(fw.name.clone()));
             }
         }
         Ok(())
@@ -1614,6 +1735,161 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, ManifestError::InvalidFeatureName(_)));
+    }
+
+    #[test]
+    fn vendor_block_round_trips() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [vendor.xilinx]
+            sim_models = ["hardware/sim_models/BUFG.sv", "hardware/sim_models/glbl.sv"]
+            stubs = ["hardware/stubs/PLLE2_ADV.sv"]
+            blackbox_modules = ["MMCME2_ADV", "PLLE2_ADV"]
+
+            [vendor.altera]
+            sim_models = []
+            "#,
+        )
+        .unwrap();
+        let xilinx = m.vendor.get("xilinx").unwrap();
+        assert_eq!(xilinx.sim_models.len(), 2);
+        assert_eq!(xilinx.stubs, vec!["hardware/stubs/PLLE2_ADV.sv"]);
+        assert_eq!(xilinx.blackbox_modules, vec!["MMCME2_ADV", "PLLE2_ADV"]);
+        assert!(m.vendor.contains_key("altera"));
+    }
+
+    #[test]
+    fn vendor_block_default_empty() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            "#,
+        )
+        .unwrap();
+        assert!(m.vendor.is_empty());
+    }
+
+    #[test]
+    fn firmware_round_trips() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+
+            [design]
+            top = "t"
+
+            [[firmware]]
+            name = "isa_tests"
+            path = "software/riscv-isa-tests"
+            build = "make"
+            artifacts = "*.hex"
+
+            [[firmware]]
+            name = "c_tests"
+            path = "software/c_tests"
+            build = "make all"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.firmware.len(), 2);
+        assert_eq!(m.firmware[0].name, "isa_tests");
+        assert_eq!(m.firmware[0].artifacts.as_deref(), Some("*.hex"));
+        assert_eq!(m.firmware[1].build, "make all");
+        assert!(m.firmware[1].artifacts.is_none());
+    }
+
+    #[test]
+    fn firmware_invalid_name_errors() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [[firmware]]
+            name = "1bad"
+            path = "."
+            build = "true"
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::InvalidFirmwareName(_)));
+    }
+
+    #[test]
+    fn firmware_duplicate_name_errors() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [[firmware]]
+            name = "fw"
+            path = "a"
+            build = "true"
+            [[firmware]]
+            name = "fw"
+            path = "b"
+            build = "true"
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::DuplicateFirmwareName(_)));
+    }
+
+    #[test]
+    fn hooks_round_trip_and_empty_strings_treated_as_unset() {
+        let m = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [hooks]
+            pre-build = "make -C ip/"
+            pre-test = "echo hi"
+            post-test = ""
+            "#,
+        )
+        .unwrap();
+        assert_eq!(m.hooks.for_phase(HookPhase::PreBuild), Some("make -C ip/"));
+        assert_eq!(m.hooks.for_phase(HookPhase::PreTest), Some("echo hi"));
+        assert_eq!(m.hooks.for_phase(HookPhase::PostTest), None);
+        assert_eq!(m.hooks.for_phase(HookPhase::PreCheck), None);
+    }
+
+    #[test]
+    fn hooks_unknown_phase_rejected_by_deny_unknown_fields() {
+        let err = parse(
+            r#"
+            [package]
+            name = "demo"
+            version = "0.1.0"
+            [design]
+            top = "t"
+            [hooks]
+            "post-build" = "echo nope"
+            "#,
+        )
+        .unwrap_err();
+        assert!(matches!(err, ManifestError::Parse(_)));
     }
 
     #[test]

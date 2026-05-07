@@ -5,6 +5,24 @@ implementation lives in `crates/kiln-core/src/manifest.rs` and is the
 authoritative parser — if this document and the parser disagree, the parser
 wins and this document is wrong.
 
+## Editor autocomplete via JSON Schema
+
+The current schema is published at
+<https://tejasprabhune.github.io/kiln/kiln-schema.json>. Add a header
+comment to your `Kiln.toml` and any TOML LSP that supports the
+[`#:schema`](https://taplo.tamasfe.dev/configuration/directives.html)
+directive (taplo, helix, Even Better TOML, etc.) will load it:
+
+```toml
+#:schema https://tejasprabhune.github.io/kiln/kiln-schema.json
+
+[package]
+name = "demo"
+version = "0.1.0"
+```
+
+To inspect the schema locally without the network, run `kiln schema`.
+
 ## Top-level structure
 
 ```toml
@@ -276,6 +294,73 @@ CLI surface (mirrors cargo):
 
 Active features run in selection order; later features overwrite earlier
 ones on conflicting `defines` keys.
+
+## `[vendor.<name>]`
+
+Vendor library blocks. Each named block contributes sources to the
+project's resolved source set and (optionally) declares modules that
+verilator should treat as black boxes.
+
+```toml
+[vendor.xilinx]
+sim_models       = ["hardware/sim_models/BUFG.sv", "hardware/sim_models/glbl.sv"]
+stubs            = ["hardware/stubs/PLLE2_ADV.sv"]
+blackbox_modules = ["MMCME2_ADV", "PLLE2_ADV"]
+```
+
+| Key                | Type                 | Default | Notes |
+| ------------------ | -------------------- | ------- | ----- |
+| `sim_models`       | list of glob strings | `[]`    | Appended to the resolved source set. Visible to slang, verilator, and doc generation. |
+| `stubs`            | list of glob strings | `[]`    | Appended to the resolved source set today; future synthesis backends will keep these out of simulation. |
+| `blackbox_modules` | list of strings      | `[]`    | Each name becomes `--bbox <name>` to verilator so the body is not compiled. Aggregated and deduplicated across all vendor blocks. |
+
+Vendor names are free-form; e.g. `[vendor.xilinx]`, `[vendor.altera]`,
+`[vendor.custom]`. Group by vendor to keep the manifest readable.
+
+## `[[firmware]]`
+
+Embedded firmware artifacts produced by an external build system and
+consumed by RTL tests. `kiln test` runs every declared firmware build
+once (deduped by `(path, build)`) before any per-test `prebuild`.
+
+```toml
+[[firmware]]
+name = "isa_tests"
+path = "software/riscv-isa-tests"
+build = "make"
+artifacts = "*.hex"
+```
+
+| Key         | Type   | Required | Notes |
+| ----------- | ------ | -------- | ----- |
+| `name`      | string | yes      | Free-form identifier, must be a valid SystemVerilog identifier. |
+| `path`      | path   | yes      | Directory the build runs in, relative to the project root. |
+| `build`     | string | yes      | Shell command run inside `path`. |
+| `artifacts` | string | no       | Glob (relative to `path`) describing produced files. Documentary today; future tooling will surface artefact lists. |
+
+## `[hooks]`
+
+Project-level shell escapes for kiln subcommand lifecycle phases.
+Each value is a single shell line, executed at the project root with
+the system shell. Empty strings are treated as unset.
+
+```toml
+[hooks]
+pre-check  = ""
+pre-build  = "make -C ip/"
+pre-test   = "git submodule update --init"
+post-test  = "echo done"
+```
+
+| Phase       | Fires |
+| ----------- | ----- |
+| `pre-check` | Before slang elaboration in `kiln check`. |
+| `pre-build` | Before verilator in `kiln build` (and the build phase of `kiln run` / `kiln test`). |
+| `pre-test`  | Before any testbench is started by `kiln test`. |
+| `post-test` | After `kiln test` finishes (regardless of pass/fail). |
+
+Pre-* hook failures abort the parent subcommand. `post-test` failures
+are logged but never change the test outcome.
 
 ## `[wave]`
 

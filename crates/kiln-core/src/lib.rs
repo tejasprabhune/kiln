@@ -28,10 +28,10 @@ pub mod profile;
 pub mod project;
 
 pub use manifest::{
-    Design, Detect, DurationSpec, Feature, FeatureSelection, FeaturesConfig, LintConfig,
-    LintSeverity, Manifest, ManifestError, Package, SvLanguage, TestCase, TestConfig, TestMatrix,
-    ToolSlang, ToolVerible, ToolVerilator, Tools, TraceFormat, ValidateOptions, WaveConfig,
-    WaveFormat, XAssign,
+    Design, Detect, DurationSpec, Feature, FeatureSelection, FeaturesConfig, Firmware, HookPhase,
+    Hooks, LintConfig, LintSeverity, Manifest, ManifestError, Package, SvLanguage, TestCase,
+    TestConfig, TestMatrix, ToolSlang, ToolVerible, ToolVerilator, Tools, TraceFormat,
+    ValidateOptions, Vendor, WaveConfig, WaveFormat, XAssign,
 };
 pub use profile::ResolvedConfig;
 pub use project::{find_manifest, ProjectError, MANIFEST_FILENAME};

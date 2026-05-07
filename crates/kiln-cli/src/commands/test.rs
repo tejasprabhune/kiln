@@ -6,19 +6,21 @@
 //! `target/kiln/last-run.json` powers `--rerun` and `--skip-passed`.
 
 use std::io::{IsTerminal, Write};
+use std::path::Path;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Context, Result};
 
 use kiln_build::SourceSet;
-use kiln_core::{find_manifest, Manifest};
+use kiln_core::{find_manifest, HookPhase, Manifest};
 use kiln_test::{
     discover, load_last_run, run_many_with_options, save_last_run, DiscoveredTest, LastRun,
     LastRunEntry, ProgressEvent, RunOptions, Status,
 };
 
 use crate::commands::{apply_feature_flags, FeatureFlags};
+use crate::hooks;
 use crate::reporter;
 
 /// Flat parameter object so the dispatch arm in `commands/mod.rs` stays tidy.
@@ -49,6 +51,19 @@ pub fn run(args: Args) -> Result<()> {
         .to_path_buf();
     let mut manifest = Manifest::load(&manifest_path)?;
     apply_feature_flags(&mut manifest, &args.features)?;
+
+    hooks::run_pre_hook(&project_root, &manifest.hooks, HookPhase::PreBuild)?;
+    hooks::run_pre_hook(&project_root, &manifest.hooks, HookPhase::PreTest)?;
+    let outcome = run_inner(args, &manifest, &project_root);
+    hooks::run_post_hook(&project_root, &manifest.hooks, HookPhase::PostTest);
+    outcome
+}
+
+fn run_inner(args: Args, manifest: &Manifest, project_root: &Path) -> Result<()> {
+    // Re-bind to keep the rest of the body unchanged. The original
+    // function did this as locals.
+    let manifest = manifest.clone();
+    let project_root = project_root.to_path_buf();
 
     let all_tests = discover(&project_root, &manifest)?;
     let total_discovered = all_tests.len();
